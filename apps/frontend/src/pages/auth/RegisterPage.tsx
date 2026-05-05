@@ -86,8 +86,9 @@ export default function RegisterPage() {
       });
       setSuccess(true);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      setServerError(error?.response?.data?.error ?? 'Error al registrarse');
+      const error = err as { response?: { data?: { error?: unknown } } };
+      const raw = error?.response?.data?.error;
+      setServerError(typeof raw === 'string' ? raw : 'Error al registrarse');
     }
   };
 
