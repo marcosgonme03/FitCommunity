@@ -1,0 +1,1011 @@
+================================================================================
+                    ESPECIFICACIÓN TÉCNICA Y COMERCIAL
+                      APP DEPORTIVA INTEGRAL - FITCOMMUNITY
+================================================================================
+
+Fecha: Mayo 2026
+Cliente: Empresa Deportiva (Referencia Provisional)
+Desarrollador: Beesoftware / Freelance Developer
+Estado: Propuesta Profesional v1.0
+
+================================================================================
+1. RESUMEN EJECUTIVO
+================================================================================
+
+Se propone el desarrollo de una aplicación móvil y web integral para gestión
+de entrenamientos deportivos con comunidad integrada y panel administrativo
+avanzado. La plataforma será escalable, segura y diseñada para proporcionar
+una experiencia de usuario excepcional que fomente la retención y engagement.
+
+Objetivo Principal: Crear un ecosistema donde los usuarios registren sus
+entrenamientos, compartan logros, interactúen con otros atletas y reciban
+seguimiento personalizado desde un panel administrativo robusto.
+
+Público Objetivo:
+  - Usuarios finales: Atletas amateurs, profesionales, entusiastas del fitness
+  - Rango de edad: 16-65 años
+  - Nivel técnico: Desde principiantes hasta avanzados
+  - Geografía: Inicialmente España (expandible)
+
+================================================================================
+2. MÓDULOS PRINCIPALES
+================================================================================
+
+2.1 MÓDULO DE AUTENTICACIÓN Y ONBOARDING
+────────────────────────────────────────
+
+Funcionalidades:
+  ✓ Registro con email / Google / Apple OAuth
+  ✓ Autenticación de dos factores (2FA) opcional
+  ✓ Recuperación segura de contraseña
+  ✓ Verificación de email con token temporal
+  ✓ Onboarding guiado (5-7 pasos máximo)
+  ✓ Setup de perfil inicial con objetivos deportivos
+  ✓ Selección de deportes/categorías de interés
+
+Requerimientos de Seguridad:
+  • JWT tokens con refresh tokens seguros
+  • Almacenamiento de contraseñas con bcrypt (min 12 rondas)
+  • Rate limiting en endpoints de autenticación
+  • Detección de intentos de fuerza bruta
+  • Expiración de sesiones (30 días máximo)
+
+────────────────────────────────────────
+
+2.2 MÓDULO DE PERFIL DE USUARIO
+────────────────────────────────────────
+
+Datos del Perfil:
+  • Información personal (nombre, avatar, bio, género, fecha nacimiento)
+  • Datos físicos (altura, peso actual, peso objetivo, IMC)
+  • Historial de pesos (tracking visual con gráficas)
+  • Deportes principales y secundarios
+  • Nivel de experiencia (principiante/intermedio/avanzado)
+  • Objetivos personales (ganar masa, perder peso, resistencia, fuerza, flexibilidad)
+  • Disponibilidad horaria preferida para entrenar
+  • Lesiones o limitaciones físicas
+
+Funcionalidades:
+  ✓ Edición de todos los campos del perfil
+  ✓ Subida y cambio de avatar con compresión automática
+  ✓ Vista pública personalizable (qué datos mostrar a otros usuarios)
+  ✓ Historial de cambios de peso con gráficas de progreso
+  ✓ Badges/logros desbloqueables (basado en actividad)
+  ✓ Estadísticas personales (total entrenamientos, horas, calorías quemadas)
+  ✓ Preferencias de privacidad granulares
+  ✓ Zona horaria y configuración regional
+
+────────────────────────────────────────
+
+2.3 MÓDULO DE REGISTRO DE ENTRENAMIENTOS
+────────────────────────────────────────
+
+Registro de Entrenamientos (Core Business):
+  ✓ Crear entrenamiento con:
+    - Tipo de deporte/categoría (fuerza, cardio, flexibilidad, mixto)
+    - Duración exacta (start/end time o duración manual)
+    - Intensidad (baja/media/alta/máxima)
+    - Ubicación (gimnasio, parque, casa, etc.)
+    - Descripción de ejercicios realizados
+    - Series, repeticiones, peso levantado
+    - Distancia recorrida (para cardio)
+    - Calorías estimadas/quemadas
+    - Fotos/videos (opcional)
+    - Música/playlist utilizada
+    - Compañía (solo, con amigos, entrenador)
+
+  ✓ Plantillas de entrenamientos guardadas (crear y reutilizar)
+  ✓ Autollenado con histórico reciente
+  ✓ Edición y eliminación de entrenamientos previos
+  ✓ Visualización en calendario (vista mes/semana/día)
+  ✓ Historial completo con filtros avanzados
+
+Análisis de Entrenamientos:
+  • Estadísticas semanales (total horas, calorías, entrenamientos)
+  • Estadísticas mensuales con comparativas
+  • Gráficas de consistencia (racha de días activos)
+  • Análisis de variedad (qué tipos de deporte práctica más)
+  • Progreso de fuerza (máximo peso levantado en ejercicios)
+  • Evolución de resistencia (mejora en tiempos/distancias)
+  • Calorías acumuladas (con alertas de metas)
+
+Integraciones (Fase 1.5):
+  ✓ Sincronización con Apple Health
+  ✓ Sincronización con Google Fit
+  ✓ Sincronización con Garmin/Fitbit (API)
+  ✓ Sincronización con Strava (para actividades cardio)
+
+────────────────────────────────────────
+
+2.4 MÓDULO DE COMUNIDAD Y SOCIAL
+────────────────────────────────────────
+
+Feed de Actividad (Similar a Instagram/Twitter):
+  ✓ Timeline personalizado con actividades de:
+    - Usuarios seguidos
+    - Grupos de interés
+    - Retos en los que participa
+    - Contenido destacado del algoritmo
+  ✓ Filtros (tipo deporte, solo amigos, solo seguidos, local)
+  ✓ Búsqueda avanzada de publicaciones
+
+Sistema de Interacciones:
+  ✓ Likes/reacciones emoji en entrenamientos
+  ✓ Comentarios en entrenamientos (con menciones @)
+  ✓ Respuestas a comentarios (threading)
+  ✓ Sistema de notificaciones en tiempo real
+  ✓ Privacidad de comentarios (público/solo seguidores/privado)
+
+Sistema de Seguimiento:
+  ✓ Seguir/dejar de seguir usuarios
+  ✓ Bloquear usuarios (sin acceso a perfil)
+  ✓ Lista de seguidores y seguidos
+  ✓ Recomendaciones personalizadas de usuarios similares
+  ✓ Seguimiento de grupos temáticos
+
+Mensajería Privada:
+  ✓ Chat 1:1 entre usuarios
+  ✓ Notificaciones de nuevos mensajes
+  ✓ Historial de conversaciones
+  ✓ Bloqueo de mensajes privados
+
+Retos Comunitarios:
+  ✓ Crear retos públicos (ej: "30 días de cardio", "100 entrenamientos en 3 meses")
+  ✓ Participar en retos
+  ✓ Leaderboards de retos (ranking de participantes)
+  ✓ Premios virtuales (badges, trofeos)
+  ✓ Retos patrocinados por la empresa o marcas
+
+Grupos Temáticos:
+  ✓ Crear/unirse a grupos (CrossFit, Running, Yoga, Calistenia, etc.)
+  ✓ Moderadores de grupo (designables)
+  ✓ Feed grupal con entrenamientos del grupo
+  ✓ Chat grupal
+  ✓ Eventos groupales (entrenamientos conjuntos programados)
+
+Sistema de Reputación:
+  ✓ Puntos por actividad (entrenar, comentar, ayudar otros usuarios)
+  ✓ Rangos/niveles (Principiante, Entusiasta, Atleta, Campeón)
+  ✓ Insignias por logros específicos
+  ✓ Perfil destacado en leaderboards globales
+
+────────────────────────────────────────
+
+2.5 MÓDULO ADMIN/BUSINESS INTELLIGENCE
+────────────────────────────────────────
+
+Gestión de Usuarios:
+  ✓ Vista de todos los usuarios con:
+    - Tabla filtrable/ordenable por diversos criterios
+    - Estado (activo/inactivo/suspendido/baneado)
+    - Última actividad
+    - Número de entrenamientos
+    - Tasa de retención
+  ✓ Búsqueda y filtros avanzados
+  ✓ Editar/eliminar datos de usuarios (con caution)
+  ✓ Suspender/banear usuarios (con razón registrada)
+  ✓ Ver detalles completos del perfil
+  ✓ Auditoría de acciones sobre usuarios
+  ✓ Envío de mensajes/notificaciones masivos
+
+Moderación de Contenido:
+  ✓ Dashboard de reportes de usuarios/contenido
+  ✓ Revisar entrenamientos reportados
+  ✓ Revisar comentarios/mensajes reportados
+  ✓ Eliminar contenido inapropiado
+  ✓ Suspender usuarios por violaciones (escala graduada)
+  ✓ Historial de sanciones por usuario
+  ✓ Reglas de comunidad claras y accesibles
+
+Gestión de Retos:
+  ✓ Crear retos administrativos
+  ✓ Editar/eliminar retos
+  ✓ Ver participantes y leaderboards
+  ✓ Distribución de premios
+  ✓ Análisis de participación en retos
+
+Gestión de Grupos:
+  ✓ Crear/editar/eliminar grupos
+  ✓ Designar/remover moderadores
+  ✓ Revisar contenido grupal
+  ✓ Estadísticas de grupos (miembros, actividad)
+
+Analítica y Reportes:
+  ✓ Dashboard principal con KPIs:
+    - Número total de usuarios
+    - Usuarios activos (DAU/MAU)
+    - Número total de entrenamientos
+    - Calorías totales quemadas
+    - Tasa de retención
+    - Churn rate
+  ✓ Gráficas de crecimiento (líneas, barras, áreas)
+  ✓ Análisis de comportamiento:
+    - Deporte más popular
+    - Horarios pico de uso
+    - Tiempo promedio en app
+    - Tasa de finalización de retos
+  ✓ Reportes exportables (PDF, CSV, Excel)
+  ✓ Dashboard customizable
+
+Gestión de Contenido:
+  ✓ Publicar noticiarios/tips dentro de la app
+  ✓ Banners/promociones personalizables
+  ✓ Push notifications masivas
+  ✓ Campañas de reengagement
+
+Control de Suscripción (si aplica):
+  ✓ Planes disponibles (free/premium/pro)
+  ✓ Gestión de pagos
+  ✓ Cancelaciones y reembolsos
+  ✓ Historial de transacciones
+
+Configuración General:
+  ✓ Ajustes de la app (mantenimiento, feature flags)
+  ✓ Versiones de términos de servicio
+  ✓ Política de privacidad
+  ✓ Gestión de datos sensibles (GDPR compliance)
+  ✓ Logs de auditoria del admin
+  ✓ Gestión de roles y permisos
+
+────────────────────────────────────────
+
+2.6 MÓDULOS COMPLEMENTARIOS (VALOR AÑADIDO)
+────────────────────────────────────────
+
+Notificaciones Inteligentes:
+  ✓ Recordatorio para entrenar (personalizable por horario)
+  ✓ Alertas de inactividad ("¡Lleva 3 días sin entrenar!")
+  ✓ Notifications de interacciones sociales (likes, comentarios)
+  ✓ Resumen semanal de actividad
+  ✓ Retos próximos a terminar
+  ✓ Aniversarios de hitos
+
+Wearables y Dispositivos:
+  ✓ Sincronización con smartwatches
+  ✓ Lecturas de ritmo cardíaco
+  ✓ Pasos diarios integrados
+  ✓ Calorías desde dispositivo wearable
+
+Sistema de Logros/Gamificación:
+  ✓ Badges por milestones (1º entreno, 100 entrenamientos, etc.)
+  ✓ Streaks (rachas de días consecutivos)
+  ✓ Trofeos mensuales/anuales
+  ✓ Tabla de logros en perfil
+  ✓ Sistema de puntos canjeables (futuro)
+
+Búsqueda y Descubrimiento:
+  ✓ Búsqueda de usuarios por criterios
+  ✓ Descubrimiento de deportes/grupos nuevos
+  ✓ Tendencias locales (qué entrenamientos son populares en tu zona)
+  ✓ Recomendador de rutinas basado en perfil
+
+================================================================================
+3. ARQUITECTURA TÉCNICA
+================================================================================
+
+3.1 STACK RECOMENDADO
+────────────────────────────────────────
+
+Backend:
+  • Runtime: Node.js (v20+)
+  • Framework: Express.js o Fastify
+  • Lenguaje: TypeScript
+  • Base de datos: PostgreSQL (primary)
+  • Cache: Redis (sesiones, caché, real-time)
+  • ORM: Prisma o TypeORM
+  • API: REST + WebSockets (real-time notifications/chat)
+
+Frontend Web:
+  • Framework: React 18+
+  • Lenguaje: TypeScript
+  • State Management: Zustand o Redux Toolkit
+  • UI Components: Material-UI o Shadcn/ui
+  • Styling: Tailwind CSS
+  • Build Tool: Vite
+
+Frontend Mobile:
+  • Opción 1: React Native + Expo
+  • Opción 2: Flutter (mejor rendimiento)
+  • Opción 3: Aplicaciones nativas (iOS + Android)
+  • Para MVP: Aplicación web responsiva (PWA) + Wrapper nativo
+
+Infraestructura:
+  • Cloud: AWS, Google Cloud o DigitalOcean
+  • Containers: Docker + Docker Compose
+  • Orquestación: Kubernetes (si escala) o ECS
+  • CI/CD: GitHub Actions
+  • Monitoreo: Sentry, DataDog, o CloudWatch
+  • Storage: S3 (fotos/videos) o similar
+
+3.2 BASE DE DATOS - ESQUEMA CONCEPTUAL
+────────────────────────────────────────
+
+Tablas Principales:
+
+users
+├── id (UUID)
+├── email (unique)
+├── password_hash (bcrypt)
+├── firstName, lastName
+├── avatar_url
+├── bio
+├── gender
+├── dateOfBirth
+├── createdAt, updatedAt
+├── lastLoginAt
+├── isActive
+
+user_profiles
+├── userId (FK)
+├── currentWeight, heightCm
+├── targetWeight
+├── level (beginner/intermediate/advanced)
+├── primarySports (array/relation)
+├── injuries
+├── privacySettings (JSON)
+
+workouts
+├── id (UUID)
+├── userId (FK)
+├── type (cardio/strength/flexibility/mixed)
+├── sport (running/weightlifting/yoga/etc)
+├── duration_minutes
+├── startedAt, endedAt
+├── intensity (low/medium/high/max)
+├── location
+├── description
+├── caloriesBurned
+├── weatherCondition
+├── companionUserIds (array/relation)
+├── photoUrls (array)
+├── createdAt
+
+workout_exercises
+├── id
+├── workoutId (FK)
+├── exerciseName
+├── sets
+├── reps
+├── weight_kg
+├── duration_seconds
+├── distance_km
+├── notes
+
+social_follows
+├── followerId (FK)
+├── followingId (FK)
+├── createdAt
+├── isActive
+
+social_blocks
+├── blockerId (FK)
+├── blockedUserId (FK)
+
+social_likes
+├── userId (FK)
+├── workoutId (FK)
+├── reaction_type (emoji)
+├── createdAt
+
+social_comments
+├── id (UUID)
+├── userId (FK)
+├── workoutId (FK)
+├── parentCommentId (FK, para replies)
+├── content
+├── createdAt, updatedAt
+
+community_groups
+├── id (UUID)
+├── name
+├── description
+├── category (sport type)
+├── avatar_url
+├── createdBy (FK)
+├── memberCount
+├── visibility (public/private)
+├── createdAt
+
+group_members
+├── groupId (FK)
+├── userId (FK)
+├── role (member/moderator/admin)
+├── joinedAt
+
+challenges
+├── id (UUID)
+├── name
+├── description
+├── type (workouts_count/total_calories/streak_days/specific_sport)
+├── goal_value
+├── startDate, endDate
+├── createdBy (FK)
+├── visibility (public/private)
+├── rewardDescription
+
+challenge_participants
+├── challengeId (FK)
+├── userId (FK)
+├── currentProgress
+├── completed (boolean)
+├── completedAt
+
+direct_messages
+├── id (UUID)
+├── senderId (FK)
+├── recipientId (FK)
+├── content
+├── isRead
+├── createdAt
+
+notifications
+├── id (UUID)
+├── userId (FK)
+├── type (like/comment/follow/challenge/message)
+├── actorUserId (FK)
+├── relatedEntityId
+├── isRead
+├── createdAt
+
+user_badges
+├── id
+├── userId (FK)
+├── badgeType (achievement name)
+├── unlockedAt
+
+admin_logs
+├── id
+├── adminUserId (FK)
+├── action (user_banned/content_deleted/etc)
+├── targetUserId (FK)
+├── details (JSON)
+├── timestamp
+
+content_reports
+├── id
+├── reportedByUserId (FK)
+├── reportedItemType (workout/comment/user)
+├── reportedItemId
+├── reason
+├── status (pending/reviewed/dismissed/actioned)
+├── createdAt, resolvedAt
+
+3.3 INTEGRACIONES EXTERNAS
+────────────────────────────────────────
+
+Autenticación:
+  ✓ Google OAuth 2.0
+  ✓ Apple Sign In
+  ✓ GitHub (opcional, para desarrolladores)
+
+Pagos (si aplica plan de suscripción):
+  ✓ Stripe (recomendado)
+  ✓ PayPal (alternativa)
+  ✓ SEPA transfers (España específicamente)
+
+Wearables y Health:
+  ✓ Apple HealthKit
+  ✓ Google Fit
+  ✓ Garmin Connect
+  ✓ Fitbit API
+  ✓ Strava API
+
+Notificaciones:
+  ✓ Firebase Cloud Messaging (FCM) para push notifications
+  ✓ SendGrid o Twilio para emails
+
+Analytics:
+  ✓ Mixpanel o Amplitude (user behavior)
+  ✓ Google Analytics 4
+  ✓ Sentry (error tracking)
+
+Mapas (para entrenamientos con ubicación):
+  ✓ Google Maps API
+  ✓ OpenStreetMap/Mapbox
+
+================================================================================
+4. EXPERIENCIA DE USUARIO (UX/UI)
+================================================================================
+
+4.1 PRINCIPIOS DE DISEÑO
+────────────────────────────────────────
+
+Paleta de Colores Propuesta:
+  • Primario: Azul vibrante (#2563EB) - energía, confianza, deporte
+  • Secundario: Verde lima (#10B981) - salud, crecimiento, logro
+  • Acento: Naranja (#F97316) - motivación, energía extra
+  • Grises: #1F2937 (dark) a #F3F4F6 (light) - jerarquía clara
+  • Fondos: Dark mode default (#0F172A) + light mode opción
+
+Tipografía:
+  • Heading: Inter o Poppins (sans-serif, moderna, legible)
+  • Body: Inter (consistencia, fácil lectura)
+  • Monospace: JetBrains Mono (datos numéricos)
+
+Componentes Clave:
+  ✓ Botones CTA (Call To Action) claros y grandes
+  ✓ Cards modulares para entrenamientos
+  ✓ Gráficas animadas pero rápidas
+  ✓ Formularios con validación en tiempo real
+  ✓ Modales para confirmaciones críticas
+  ✓ Tooltips informativos
+  ✓ Empty states atractivos (cuando no hay datos)
+  ✓ Skeleton loaders para datos en carga
+
+4.2 FLUJOS PRINCIPALES DE UX
+────────────────────────────────────────
+
+Flujo 1: Registro a Primer Entrenamiento (Onboarding)
+  1. Splash screen / Hero visual
+  2. Registro (email + contraseña o OAuth)
+  3. Verificación de email
+  4. Crear perfil (datos personales, objetivos)
+  5. Setup de deportes principales (5-10 opciones)
+  6. Home screen
+  7. Botón destacado "Crear mi primer entrenamiento"
+  8. Formulario guiado de creación de entrenamiento
+  9. Confirmación y celebración (confetti, medallalogro)
+
+Flujo 2: Registrar Entrenamiento (Diario)
+  1. Bottom nav / FAB button
+  2. Pantalla de creación con:
+     - Tipo de deporte (selector visual)
+     - Duración (input time o temporizador)
+     - Intensidad (slider o botones)
+     - Descripción (input grande)
+     - Fotos (opcional)
+  3. Preview antes de guardar
+  4. Guardado y notificación de éxito
+  5. Opción inmediata de compartir en comunidad
+
+Flujo 3: Explorar Comunidad
+  1. Feed principal con entrenamientos de seguidos
+  2. Cards grandes con:
+     - Avatar/nombre del usuario
+     - Foto del entrenamiento
+     - Tipo deporte + duración + intensidad
+     - Resumen descripción
+  3. Interacciones (like, comentar)
+  4. Swipe/scroll para más
+  5. Filtros rápidos (sport, location, friends)
+
+Flujo 4: Panel Admin
+  1. Login con credenciales de admin
+  2. Dashboard principal con KPIs grandes
+  3. Navegación lateral clara (Users, Moderation, Analytics, etc.)
+  4. Tablas con sorting/filtering/pagination
+  5. Modales para acciones (ban user, delete content)
+  6. Confirmaciones de acciones destructivas
+
+4.3 ACCESIBILIDAD (A11Y)
+────────────────────────────────────────
+
+Estándares a Cumplir:
+  ✓ WCAG 2.1 AA como mínimo
+  ✓ Contraste mínimo 4.5:1 en texto
+  ✓ Etiquetas ARIA correctas
+  ✓ Navegación por teclado completa
+  ✓ Tamaños de toque mínimo 44x44px
+  ✓ Texto alternativo en imágenes
+  ✓ Subtítulos en videos
+  ✓ Soporte para screen readers (JAWS, NVDA)
+  ✓ Versión en escala de grises legible
+
+================================================================================
+5. SEGURIDAD Y PRIVACIDAD
+================================================================================
+
+5.1 SEGURIDAD DE DATOS
+────────────────────────────────────────
+
+Autenticación:
+  ✓ JWT con RS256 signing (asymmetric)
+  ✓ Refresh tokens con rotación automática
+  ✓ 2FA TOTP opcional (Google Authenticator, Authy)
+  ✓ Password reset con tokens temporales (15 min)
+  ✓ Rate limiting: 5 intentos login / 15 min
+  ✓ Sesiones simultáneas limitadas (3 máximo)
+
+Encriptación:
+  ✓ HTTPS/TLS 1.3 obligatorio
+  ✓ Contraseñas: bcrypt con salt rounds=12
+  ✓ Datos sensibles en BD: AES-256-GCM
+  ✓ Tokens en cookies HttpOnly (no accessible vía JS)
+  ✓ CSRF protection (SameSite strict)
+
+Base de Datos:
+  ✓ Backups automáticos diarios (3 meses retenidos)
+  ✓ Replicación en read-only replica
+  ✓ Punto de recuperación (RTO 1 hora, RPO 15 minutos)
+  ✓ Encriptación de datos en reposo
+  ✓ Auditoría de cambios DDL
+
+5.2 PRIVACIDAD (GDPR/LSSI-CE)
+────────────────────────────────────────
+
+Consentimiento:
+  ✓ Checkbox explícito antes de registrar
+  ✓ Separación de consentimientos (newsletter, data processing)
+  ✓ Política de privacidad clara y accesible
+  ✓ Opción de revocar consentimiento en cualquier momento
+
+Derechos del Usuario:
+  ✓ Derecho a acceso: Descargar todos sus datos (JSON)
+  ✓ Derecho al olvido: Eliminar cuenta y todos sus datos
+  ✓ Derecho a portabilidad: Exportar datos en formato estándar
+  ✓ Derecho a rectificación: Editar datos propios
+  ✓ Derecho a restricción: Pausar el procesamiento
+
+Políticas:
+  ✓ Retención mínima de datos después de eliminación: 30 días (legal hold)
+  ✓ Datos de terceros: Solo si consentimiento explícito
+  ✓ Transferencias internacionales: Standard Contractual Clauses
+  ✓ Evaluación de impacto DPIA documentada
+
+5.3 SEGURIDAD DE APLICACIÓN
+────────────────────────────────────────
+
+Vulnerabilidades Comunes:
+  ✓ SQL Injection: Prepared statements, ORM
+  ✓ XSS: HTML sanitization, Content Security Policy
+  ✓ CSRF: SameSite cookies, tokens
+  ✓ Deserialization: Validación estricta de input
+  ✓ Path Traversal: Validación de rutas
+  ✓ Information Disclosure: Headers seguros (X-Frame-Options, etc.)
+
+Verificación:
+  ✓ OWASP Top 10 compliance
+  ✓ Dependency scanning (npm audit, Snyk)
+  ✓ SAST (SonarQube, Checkmarx)
+  ✓ Penetration testing anual (recomendado)
+  ✓ Bug bounty program (opcional)
+
+================================================================================
+6. PERFORMANCE Y ESCALABILIDAD
+================================================================================
+
+6.1 MÉTRICAS OBJETIVO
+────────────────────────────────────────
+
+Frontend:
+  ✓ Largest Contentful Paint (LCP): < 2.5 segundos
+  ✓ First Input Delay (FID): < 100ms
+  ✓ Cumulative Layout Shift (CLS): < 0.1
+  ✓ Time to Interactive (TTI): < 3.5 segundos
+  ✓ Lighthouse Score: > 90
+
+Backend:
+  ✓ API Response Time (p95): < 200ms
+  ✓ Database Query (p95): < 100ms
+  ✓ Availability: 99.9% (SLA)
+  ✓ Error Rate: < 0.1%
+  ✓ Throughput: 1000 requests/segundo
+
+6.2 OPTIMIZACIONES
+────────────────────────────────────────
+
+Caching:
+  ✓ Redis: Sesiones, perfiles frecuentes, feeds cacheados
+  ✓ CDN: CloudFront/Cloudflare para assets estáticos
+  ✓ Browser caching: Aggressive para assets, 1h para APIs
+  ✓ Query caching: Para lecturas frecuentes (leaderboards)
+
+Database:
+  ✓ Índices en columnas frecuentemente consultadas
+  ✓ Particionamiento de tablas grandes (workouts por fecha)
+  ✓ Denormalización estratégica (caches en BD)
+  ✓ Connection pooling (PgBouncer)
+  ✓ Lazy loading de relaciones
+
+API:
+  ✓ Compresión GZIP/Brotli
+  ✓ Paginación obligatoria (max 50 items por request)
+  ✓ GraphQL query limiting (depth limit, complexity)
+  ✓ Rate limiting por usuario (100 req/min)
+
+Frontend:
+  ✓ Code splitting por ruta
+  ✓ Tree shaking automático
+  ✓ Image optimization (WebP, lazy load)
+  ✓ Virtual scrolling para listas largas
+  ✓ Service workers para offline mode
+
+6.3 ESCALABILIDAD
+────────────────────────────────────────
+
+Arquitectura:
+  ✓ Stateless API (horizontal scaling)
+  ✓ Load balancing (ALB / Nginx)
+  ✓ Auto-scaling groups (CPU/Memory based)
+  ✓ Database read replicas
+  ✓ Message queues para jobs async (Redis Queue, Bull)
+
+Forecast (Primera versión):
+  • 10,000 usuarios
+  • 50,000 entrenamientos/mes
+  • 1M requests/día
+  • Peak: 100 concurrent users
+
+Escalado a 100k usuarios:
+  • Separar read/write databases
+  • Caching layer más agresivo
+  • Microservicios por dominio (users, workouts, social)
+  • Event sourcing para auditoría
+
+================================================================================
+7. FASES DE DESARROLLO Y ROADMAP
+================================================================================
+
+FASE 1 - MVP (2-3 meses)
+────────────────────────────────────────
+Objetivos: Launch y validación de mercado
+Incluye:
+  ✓ Autenticación básica (email)
+  ✓ Perfil de usuario
+  ✓ Crear/listar entrenamientos
+  ✓ Feed simple (solo seguidos)
+  ✓ Panel admin básico (usuarios, moderation)
+  ✓ Responsivo (mobile web)
+  ✓ 100 beta testers
+
+Deliverables:
+  • App web responsive
+  • Backend API REST
+  • Dashboard admin
+  • Documentación técnica
+  • Guía de usuario
+
+FASE 2 - Comunidad (1-2 meses post-launch)
+────────────────────────────────────────
+Objetivos: Activar engagement social
+Incluye:
+  ✓ Sistema de likes/comentarios
+  ✓ Seguimiento de usuarios
+  ✓ Feed algoritmo básico
+  ✓ Retos comunitarios
+  ✓ Grupos temáticos
+  ✓ Notificaciones push
+  ✓ Sistema de logros/badges
+
+FASE 3 - Mobile Native (2-3 meses post-Phase 2)
+────────────────────────────────────────
+Objetivos: Nativa iOS/Android para mejor UX
+Incluye:
+  ✓ Aplicación React Native / Flutter
+  ✓ Integración con Apple Health & Google Fit
+  ✓ Notificaciones locales
+  ✓ Offline mode básico
+  ✓ App Store + Google Play deployment
+
+FASE 4 - Inteligencia (Futuro)
+────────────────────────────────────────
+Objetivos: IA y recomendaciones personalizadas
+Incluye:
+  ✓ Recomendador de rutinas (ML)
+  ✓ Análisis predictivo (churn prediction)
+  ✓ Coaching automático (chatbot)
+  ✓ Detección de anomalías (lesiones)
+  ✓ Personalización de feed (algoritmo avanzado)
+
+================================================================================
+8. ESTRATEGIA DE MONETIZACIÓN
+================================================================================
+
+Opción 1: Freemium (Recomendado para crecimiento)
+────────────────────────────────────────
+Tier Gratis:
+  • Registro y perfil básico
+  • Entrenamientos ilimitados
+  • Feed de comunidad
+  • 5 entrenamientos en historial
+  • Básicos, sin estadísticas avanzadas
+
+Tier Premium ($4.99/mes o $39/año):
+  • Estadísticas avanzadas (gráficas, progreso)
+  • Integraciones wearables
+  • Análisis de tendencias
+  • Notificaciones personalizadas
+  • Acceso prioritario a nuevas features
+
+Tier Pro ($9.99/mes o $79/año):
+  • Todo Premium +
+  • Coaching personalizado (chat AI)
+  • Planes de entrenamiento personalizados
+  • Reportes mensuales PDF
+  • API para integraciones custom
+
+Opción 2: B2B (Gimnasios/Empresas)
+────────────────────────────────────────
+Gimnasios pueden pagar por:
+  • Branded version (logo propio)
+  • Seguimiento de clientes
+  • Admin dashboard del gimnasio
+  • Integración con sistemas pos existentes
+  • $500-2000/mes por gimnasio
+
+Opción 3: Publicidad
+────────────────────────────────────────
+  • Marcas de suplementos/ropa deportiva
+  • Anuncios contextuales (solo usuarios free)
+  • Sponsorship de retos
+  • Native advertising de marcas
+
+================================================================================
+9. EQUIPO Y RECURSOS RECOMENDADOS
+================================================================================
+
+Para MVP (Fase 1):
+  • 1 Full Stack Developer (TypeScript/Node/React)
+  • 1 Product Manager / UX Designer
+  • 1 QA Engineer
+  • 1 DevOps Engineer (part-time)
+  • Total: ~3-4 personas, 3 meses
+
+Para Fase 2-3:
+  • +1 Frontend Specialist (React Native)
+  • +1 Backend Engineer (segunda persona)
+  • +1 QA adicional
+  • +1 Community Manager (part-time)
+
+Costo estimado (aproximado):
+  • MVP: €15,000-25,000
+  • Full v1.0: €40,000-60,000
+  • Hosting/infra primer año: €2,000-5,000
+
+================================================================================
+10. MÉTRICAS DE ÉXITO
+================================================================================
+
+Métricas de Crecimiento:
+  KPI_001: Usuarios registrados
+  KPI_002: Usuarios activos mensuales (MAU)
+  KPI_003: Usuarios activos diarios (DAU)
+  KPI_004: Ratio DAU/MAU (engagement)
+  KPI_005: Tasa de retención día 1, 7, 30
+
+Métricas de Engagement:
+  KPI_006: Entrenamientos/usuario/mes (promedio)
+  KPI_007: Tiempo medio en app (min/día)
+  KPI_008: Tasa de comentarios/likes (interación social)
+  KPI_009: Tasa de participación en retos
+  KPI_010: Tasa de crear grupo / seguimiento
+
+Métricas Técnicas:
+  KPI_011: Uptime (99.9%+)
+  KPI_012: API response time (< 200ms p95)
+  KPI_013: Error rate (< 0.1%)
+  KPI_014: Crash rate (mobile, < 0.5%)
+
+Métricas de Monetización:
+  KPI_015: Tasa de conversión free → premium
+  KPI_016: MRR (Monthly Recurring Revenue)
+  KPI_017: Churn rate (< 5%/mes ideal)
+  KPI_018: LTV (Lifetime Value)
+  KPI_019: CAC (Customer Acquisition Cost)
+
+================================================================================
+11. TÉRMINOS DE SERVICIO Y LEGAL
+================================================================================
+
+Requerimientos:
+  ✓ Política de privacidad (GDPR compliant)
+  ✓ Términos de servicio (claros, justos)
+  ✓ Política de cookies
+  ✓ Política de moderación/community
+  ✓ Renuncia de responsabilidad (salud, lesiones)
+  ✓ Política de propiedad intelectual
+  ✓ Política de reembolsos
+  ✓ Aviso de accesibilidad
+
+Consejo Legal:
+  → Revisar con abogado especializado en tech/privacidad
+  → Datos de salud pueden ser sensibles → máxima protección
+  → Responsabilidad por lesiones → disclaimers claros
+
+================================================================================
+12. PLAN DE LANZAMIENTO Y GO-TO-MARKET
+================================================================================
+
+Pre-Launch (2 semanas antes):
+  ✓ Beta testing con 50-100 usuarios cercanos
+  ✓ Feedback integration (bugs críticos)
+  ✓ Marketing assets preparados (videos, fotos)
+  ✓ Social media seeded (Instagram, TikTok)
+  ✓ Press release preparado
+  ✓ Landing page optimizada
+  ✓ Email list warmup
+
+Launch Day:
+  ✓ Anuncio en redes sociales
+  ✓ Envío email a lista de espera
+  ✓ Push notification a beta testers
+  ✓ Contenido inicial destacado
+  ✓ Rewards para early adopters (badges exclusivos)
+  ✓ Community challenge inicial
+  ✓ Monitoreo 24/7 de bugs
+
+Post-Launch (Primeras 2 semanas):
+  ✓ Daily standup de feedback
+  ✓ Hotfixes según reportes
+  ✓ Engagement initiatives (challenges, content)
+  ✓ Weekly feature rollouts (small improvements)
+  ✓ Analytics tracking
+  ✓ User interviews
+
+Estrategia de Growth (Primeros 3 meses):
+  • Organic: Influencers fitness + athletes
+  • Referral program (usuario invita amigo → ambos get reward)
+  • Partnerships locales (gimnasios Valencia)
+  • Contenido educativo (blog, YouTube tips)
+  • SEO targeting "app entrenamientos" + keywords
+
+================================================================================
+13. CONSIDERACIONES ESPECIALES
+================================================================================
+
+Inclusividad:
+  ✓ Múltiples deportes y niveles (no solo gymrats)
+  ✓ Diferentes cuerpos/capacidades representadas
+  ✓ Opciones de privacidad granulares (no obligatorio compartir)
+  ✓ Comunidad welcoming (reglas anti-toxicidad)
+
+Salud Mental:
+  ✓ Prevenir fitness obsession (alertas si demasiada actividad)
+  ✓ No glorificar comportamientos extremos
+  ✓ Recursos de ayuda si se detectan pattern preocupante
+  ✓ Disclaimers médicos claros
+
+Datos Sensibles:
+  ✓ Información de peso/IMC: Privada por defecto
+  ✓ Opción de no mostrar métricas de salud
+  ✓ No compartir automáticamente a terceros
+  ✓ Encriptación end-to-end para chats privados
+
+Sostenibilidad:
+  ✓ Eficiencia energética del servidor
+  ✓ Data minimization (no guardar más de lo necesario)
+  ✓ Opción de exportar y eliminar datos
+  ✓ Transparencia sobre recolección
+
+================================================================================
+14. CONCLUSIÓN Y PRÓXIMOS PASOS
+================================================================================
+
+Esta especificación define una aplicación deportiva integral y profesional,
+diseñada para ser escalable, segura y atractiva para usuarios.
+
+Próximos Pasos Recomendados:
+  1. Validación de concepto con 20-30 usuarios target
+  2. Prototipos/mockups en Figma del UI principal
+  3. Definición de historias de usuario detalladas
+  4. Planning de sprint inaugural
+  5. Setup de infraestructura (git, CI/CD, BD dev)
+  6. Kick-off técnico del equipo
+
+Riesgos Identificados:
+  ⚠ Competencia establecida (Strava, JEFIT, MyFitnessPal)
+    → Diferenciador: Comunidad local + engagement + simplicidad
+  ⚠ Retención de usuarios (churn en fitness apps es alto)
+    → Mitigación: Gamification, social pressure, notificaciones inteligentes
+  ⚠ Scaling de BD a millones de entrenamientos
+    → Mitigación: Arquitectura desde inicio, read replicas, archiving
+
+Ventajas Competitivas:
+  ✓ Diseño clean y moderno (mejor UX que competidores)
+  ✓ Comunidad integrada (network effects)
+  ✓ Múltiples deportes (no solo corrida/gym)
+  ✓ Admin powerful (perfecto para B2B)
+  ✓ Onboarding suave (curva de aprendizaje baja)
+  ✓ Escalabilidad técnica
+  ✓ Privacy-first approach (GDPR compliant)
+
+================================================================================
+
+Documento preparado por: Beesoftware Development Team
+Versión: 1.0
+Fecha última revisión: Mayo 2026
+Confidencialidad: Para evaluación cliente únicamente
+
+Para preguntas técnicas o comerciales, contactar con el equipo de desarrollo.
+
+================================================================================

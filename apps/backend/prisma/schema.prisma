@@ -1,0 +1,619 @@
+// ============================================================================
+// FitCommunity — Prisma Schema
+// App de registro de entrenamientos de GIMNASIO con ejercicios, series y peso.
+// Premium con IA (xAI/Grok) para rutinas, dietas y análisis de progreso.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+  PENDING_VERIFICATION
+}
+
+enum IntensityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  MAX
+}
+
+enum FitnessGoal {
+  LOSE_WEIGHT
+  GAIN_MUSCLE
+  IMPROVE_STRENGTH
+  STAY_HEALTHY
+  RECOMP
+  POWERLIFTING
+  HYPERTROPHY
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  PROFESSIONAL
+}
+
+/// Grupos musculares principales (foco gimnasio).
+enum MuscleGroup {
+  CHEST           // Pecho
+  BACK            // Espalda
+  SHOULDERS       // Hombros
+  BICEPS          // Bíceps
+  TRICEPS         // Tríceps
+  FOREARMS        // Antebrazos
+  QUADS           // Cuádriceps
+  HAMSTRINGS      // Isquiotibiales
+  GLUTES          // Glúteos
+  CALVES          // Gemelos
+  CORE            // Core / abdomen
+  TRAPS           // Trapecios
+  LATS            // Dorsal ancho
+  FULL_BODY       // Cuerpo completo
+  CARDIO          // Cardiovascular
+}
+
+enum Equipment {
+  BARBELL         // Barra
+  DUMBBELL        // Mancuernas
+  MACHINE         // Máquina
+  CABLE           // Polea / cable
+  BODYWEIGHT      // Peso corporal
+  KETTLEBELL      // Pesa rusa
+  BAND            // Banda elástica
+  SMITH_MACHINE   // Multipower
+  CARDIO_MACHINE  // Cinta, elíptica, bici, remo
+  OTHER
+}
+
+enum ExerciseCategory {
+  COMPOUND        // Multiarticular (sentadilla, peso muerto, press banca)
+  ISOLATION       // Aislamiento (curl bíceps, extensión cuádriceps)
+  CARDIO          // Cardiovascular
+  MOBILITY        // Movilidad / estiramientos
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  PR_ACHIEVED
+  BADGE_EARNED
+  SYSTEM
+}
+
+enum BroadcastSegment {
+  ALL
+  PREMIUM
+  INACTIVE_7D
+  INACTIVE_14D
+  NEW_USERS_7D
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportReason {
+  SPAM
+  INAPPROPRIATE_CONTENT
+  HARASSMENT
+  FAKE_ACCOUNT
+  OTHER
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  UNPAID
+}
+
+enum AiConversationKind {
+  COACH_CHAT
+  ROUTINE
+  NUTRITION
+  PROGRESS_ANALYSIS
+}
+
+// ─── USUARIOS ────────────────────────────────────────────────────────────────
+
+model User {
+  id                  String     @id @default(uuid())
+  email               String     @unique
+  password_hash       String
+  role                UserRole   @default(USER)
+  status              UserStatus @default(PENDING_VERIFICATION)
+  is_email_verified   Boolean    @default(false)
+  two_fa_enabled      Boolean    @default(false)
+  two_fa_secret       String?
+  // Premium
+  is_premium          Boolean    @default(false)
+  stripe_customer_id  String?    @unique
+  // Audit
+  created_at          DateTime   @default(now())
+  updated_at          DateTime   @updatedAt
+  last_login_at       DateTime?
+  banned_at           DateTime?
+  banned_reason       String?
+
+  // Relations
+  profile                UserProfile?
+  refresh_tokens         RefreshToken[]
+  email_verifications    EmailVerification[]
+  password_resets        PasswordReset[]
+  workouts               Workout[]
+  social_likes           SocialLike[]
+  social_comments        SocialComment[]
+  followers              SocialFollow[]    @relation("UserFollowers")
+  following              SocialFollow[]    @relation("UserFollowing")
+  notifications          Notification[]    @relation("NotificationRecipient")
+  notifications_sent     Notification[]    @relation("NotificationSender")
+  badges                 UserBadge[]
+  content_reports        ContentReport[]   @relation("ReportedBy")
+  admin_logs             AdminLog[]
+  subscriptions          Subscription[]
+  ai_conversations       AiConversation[]
+  generated_routines     GeneratedRoutine[]
+  nutrition_plans        NutritionPlan[]
+  custom_exercises       Exercise[]        @relation("CustomExercises")
+  broadcast_campaigns    BroadcastCampaign[]
+
+  @@index([email])
+  @@index([status])
+  @@index([created_at])
+  @@map("users")
+}
+
+model UserProfile {
+  id                   String           @id @default(uuid())
+  user_id              String           @unique
+  username             String           @unique
+  display_name         String
+  bio                  String?          @db.VarChar(500)
+  avatar_url           String?
+  avatar_key           String?
+  cover_url            String?
+  cover_key            String?
+  height_cm            Float?
+  weight_kg            Float?
+  birth_date           DateTime?
+  location             String?
+  website              String?
+  fitness_goal         FitnessGoal?
+  experience_level     ExperienceLevel?
+  is_profile_public    Boolean          @default(true)
+  show_workouts        Boolean          @default(true)
+  show_stats           Boolean          @default(true)
+  onboarding_completed Boolean          @default(false)
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([username])
+  @@map("user_profiles")
+}
+
+// ─── AUTH ────────────────────────────────────────────────────────────────────
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  user_id     String
+  token_hash  String   @unique
+  device_info String?
+  ip_address  String?
+  expires_at  DateTime
+  is_revoked  Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@index([expires_at])
+  @@map("refresh_tokens")
+}
+
+model EmailVerification {
+  id         String   @id @default(uuid())
+  user_id    String
+  token      String   @unique
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([user_id])
+  @@map("email_verifications")
+}
+
+model PasswordReset {
+  id         String   @id @default(uuid())
+  user_id    String
+  token      String   @unique
+  expires_at DateTime
+  used_at    DateTime?
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([user_id])
+  @@map("password_resets")
+}
+
+// ─── EJERCICIOS (catálogo) ──────────────────────────────────────────────────
+
+model Exercise {
+  id                String           @id @default(uuid())
+  slug              String           @unique
+  name              String           // "Press banca con barra"
+  name_en           String?          // "Bench press"
+  description       String?          @db.Text
+  primary_muscle    MuscleGroup
+  secondary_muscles MuscleGroup[]
+  equipment         Equipment
+  category          ExerciseCategory
+  is_custom         Boolean          @default(false) // catálogo vs creado por usuario
+  created_by        String?
+  image_url         String?
+  video_url         String?
+  instructions      String?          @db.Text
+  created_at        DateTime         @default(now())
+
+  creator           User?             @relation("CustomExercises", fields: [created_by], references: [id], onDelete: SetNull)
+  workout_exercises WorkoutExercise[]
+
+  @@index([primary_muscle])
+  @@index([equipment])
+  @@index([category])
+  @@map("exercises")
+}
+
+// ─── ENTRENAMIENTOS DE GIMNASIO ─────────────────────────────────────────────
+
+model Workout {
+  id            String         @id @default(uuid())
+  user_id       String
+  title         String         @db.VarChar(200) // "Día de pierna", "Empuje pesado"
+  notes         String?        @db.Text
+  duration_min  Int
+  intensity     IntensityLevel
+  calories      Int?
+  photo_url     String?
+  is_public     Boolean        @default(true)
+  workout_date  DateTime       @default(now())
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+
+  user      User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  exercises WorkoutExercise[]
+  likes     SocialLike[]
+  comments  SocialComment[]
+  reports   ContentReport[]
+
+  @@index([user_id])
+  @@index([workout_date])
+  @@index([is_public])
+  @@map("workouts")
+}
+
+model WorkoutExercise {
+  id          String  @id @default(uuid())
+  workout_id  String
+  exercise_id String
+  order_idx   Int
+  notes       String?
+
+  workout  Workout      @relation(fields: [workout_id], references: [id], onDelete: Cascade)
+  exercise Exercise     @relation(fields: [exercise_id], references: [id], onDelete: Restrict)
+  sets     WorkoutSet[]
+
+  @@index([workout_id])
+  @@index([exercise_id])
+  @@map("workout_exercises")
+}
+
+model WorkoutSet {
+  id                  String  @id @default(uuid())
+  workout_exercise_id String
+  set_number          Int
+  reps                Int
+  weight_kg           Float?
+  rpe                 Float?   // Rate of Perceived Exertion 1-10
+  is_warmup           Boolean  @default(false)
+  is_failure          Boolean  @default(false)
+  rest_sec            Int?
+  notes               String?
+
+  workout_exercise WorkoutExercise @relation(fields: [workout_exercise_id], references: [id], onDelete: Cascade)
+
+  @@index([workout_exercise_id])
+  @@map("workout_sets")
+}
+
+// ─── SOCIAL ──────────────────────────────────────────────────────────────────
+
+model SocialFollow {
+  id           String   @id @default(uuid())
+  follower_id  String
+  following_id String
+  created_at   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [follower_id], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [following_id], references: [id], onDelete: Cascade)
+
+  @@unique([follower_id, following_id])
+  @@index([follower_id])
+  @@index([following_id])
+  @@map("social_follows")
+}
+
+model SocialLike {
+  id         String   @id @default(uuid())
+  user_id    String
+  workout_id String
+  created_at DateTime @default(now())
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  workout Workout @relation(fields: [workout_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, workout_id])
+  @@index([workout_id])
+  @@map("social_likes")
+}
+
+model SocialComment {
+  id         String   @id @default(uuid())
+  user_id    String
+  workout_id String
+  content    String   @db.VarChar(1000)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  workout Workout @relation(fields: [workout_id], references: [id], onDelete: Cascade)
+
+  @@index([workout_id])
+  @@map("social_comments")
+}
+
+// ─── GAMIFICACIÓN ────────────────────────────────────────────────────────────
+
+model Badge {
+  id          String      @id @default(uuid())
+  slug        String      @unique
+  name        String
+  description String
+  icon_url    String?
+  condition   String
+  created_at  DateTime    @default(now())
+
+  user_badges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  user_id    String
+  badge_id   String
+  earned_at  DateTime @default(now())
+
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badge_id], references: [id])
+
+  @@unique([user_id, badge_id])
+  @@map("user_badges")
+}
+
+// ─── NOTIFICACIONES ──────────────────────────────────────────────────────────
+
+model Notification {
+  id          String           @id @default(uuid())
+  user_id     String
+  sender_id   String?
+  type        NotificationType
+  title       String
+  body        String?
+  entity_id   String?
+  entity_type String?
+  is_read     Boolean          @default(false)
+  created_at  DateTime         @default(now())
+  read_at     DateTime?
+
+  user   User  @relation("NotificationRecipient", fields: [user_id], references: [id], onDelete: Cascade)
+  sender User? @relation("NotificationSender", fields: [sender_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([is_read])
+  @@map("notifications")
+}
+
+// ─── MODERACIÓN ──────────────────────────────────────────────────────────────
+
+model ContentReport {
+  id            String       @id @default(uuid())
+  reporter_id   String
+  workout_id    String?
+  reason        ReportReason
+  description   String?
+  status        ReportStatus @default(PENDING)
+  reviewed_by   String?
+  review_note   String?
+  reviewed_at   DateTime?
+  created_at    DateTime     @default(now())
+
+  reporter User     @relation("ReportedBy", fields: [reporter_id], references: [id], onDelete: Cascade)
+  workout  Workout? @relation(fields: [workout_id], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@map("content_reports")
+}
+
+model AdminLog {
+  id          String   @id @default(uuid())
+  admin_id    String
+  action      String
+  target_type String?
+  target_id   String?
+  metadata    Json?
+  ip_address  String?
+  created_at  DateTime @default(now())
+
+  admin User @relation(fields: [admin_id], references: [id])
+
+  @@index([admin_id])
+  @@index([created_at])
+  @@map("admin_logs")
+}
+
+// ─── SUSCRIPCIONES (Premium con Stripe) ─────────────────────────────────────
+
+model Subscription {
+  id                       String             @id @default(uuid())
+  user_id                  String
+  stripe_subscription_id   String             @unique
+  stripe_customer_id       String
+  stripe_price_id          String
+  status                   SubscriptionStatus
+  current_period_start     DateTime
+  current_period_end       DateTime
+  cancel_at_period_end     Boolean            @default(false)
+  canceled_at              DateTime?
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ─── IA (Grok / xAI) ─────────────────────────────────────────────────────────
+
+model AiConversation {
+  id         String              @id @default(uuid())
+  user_id    String
+  kind       AiConversationKind  @default(COACH_CHAT)
+  title      String              @db.VarChar(200)
+  created_at DateTime            @default(now())
+  updated_at DateTime            @updatedAt
+
+  user     User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  messages AiMessage[]
+
+  @@index([user_id])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id              String   @id @default(uuid())
+  conversation_id String
+  role            String
+  content         String   @db.Text
+  tokens          Int?
+  created_at      DateTime @default(now())
+
+  conversation AiConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id])
+  @@map("ai_messages")
+}
+
+model GeneratedRoutine {
+  id               String   @id @default(uuid())
+  user_id          String
+  title            String   @db.VarChar(200)
+  goal             FitnessGoal
+  days_per_week    Int
+  session_minutes  Int
+  experience_level ExperienceLevel
+  /// JSON: [{ day, focus, exercises: [{name, sets, reps, rest_sec, notes}] }]
+  plan_json        Json
+  is_favorite      Boolean  @default(false)
+  /// Solo una rutina activa a la vez por usuario (control en service, no en BD)
+  is_active        Boolean  @default(false)
+  /// Cuándo se activó por primera vez (para mostrar "llevas X semanas siguiendo esta rutina")
+  started_at       DateTime?
+  /// Día actual de la rotación secuencial (0-indexed). Se incrementa al guardar un workout desde la rutina y vuelve a 0 al llegar al final.
+  current_day_idx  Int      @default(0)
+  /// Veces que se ha descargado el PDF (engagement metric para admin)
+  download_count   Int      @default(0)
+  created_at       DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([user_id, is_active])
+  @@map("generated_routines")
+}
+
+model NutritionPlan {
+  id              String   @id @default(uuid())
+  user_id         String
+  title           String   @db.VarChar(200)
+  goal            FitnessGoal
+  daily_calories  Int
+  protein_g       Int
+  carbs_g         Int
+  fat_g           Int
+  /// JSON: [{day, meals: [...]}]
+  plan_json       Json
+  is_favorite     Boolean  @default(false)
+  /// Veces que se ha descargado el PDF (engagement metric para admin)
+  download_count  Int      @default(0)
+  created_at      DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("nutrition_plans")
+}
+
+/// Historial de notificaciones masivas enviadas por admins.
+model BroadcastCampaign {
+  id           String            @id @default(uuid())
+  admin_id     String
+  title        String            @db.VarChar(200)
+  body         String            @db.VarChar(500)
+  segment      BroadcastSegment
+  recipients   Int               @default(0)
+  template_key String?
+
+  created_at DateTime @default(now())
+
+  admin User @relation(fields: [admin_id], references: [id])
+
+  @@index([admin_id])
+  @@index([created_at])
+  @@map("broadcast_campaigns")
+}
