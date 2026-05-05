@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2, Dumbbell } from 'lucide-react';
 import authService from '../../services/auth.service';
+import { getErrorMessage } from '../../lib/errors';
 
 export default function VerifyEmailPage() {
   const { token } = useParams<{ token: string }>();
@@ -22,9 +23,8 @@ export default function VerifyEmailPage() {
         setMessage('Tu email ha sido verificado correctamente. Ya puedes iniciar sesión.');
       })
       .catch((err: unknown) => {
-        const error = err as { response?: { data?: { error?: string } } };
         setStatus('error');
-        setMessage(error?.response?.data?.error ?? 'No se pudo verificar el email.');
+        setMessage(getErrorMessage(err, 'No se pudo verificar el email.'));
       });
   }, [token]);
 

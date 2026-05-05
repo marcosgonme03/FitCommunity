@@ -8,6 +8,7 @@ import AdminLayout from './components/layout/AdminLayout';
 import PrivateRoute from './components/common/PrivateRoute';
 import PublicRoute from './components/common/PublicRoute';
 import LoadingScreen from './components/common/LoadingScreen';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import Spinner from './components/ui/Spinner';
 import Toaster from './components/ui/Toast';
 
@@ -323,8 +324,10 @@ function RoleAwareHome() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

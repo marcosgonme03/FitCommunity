@@ -10,6 +10,7 @@ import {
 import authService from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import Logo from '../../components/ui/Logo';
+import { getErrorMessage, getErrorCode } from '../../lib/errors';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -54,9 +55,8 @@ export default function LoginPage() {
         navigate(from, { replace: true });
       }
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { code?: string; error?: string } } };
-      const code = error?.response?.data?.code;
-      const message = error?.response?.data?.error ?? 'Error al iniciar sesión';
+      const code = getErrorCode(err);
+      const message = getErrorMessage(err, 'Error al iniciar sesión');
 
       if (code === 'TOTP_REQUIRED') {
         setNeedsTotp(true);

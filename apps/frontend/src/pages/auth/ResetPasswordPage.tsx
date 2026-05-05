@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Dumbbell, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import authService from '../../services/auth.service';
+import { getErrorMessage } from '../../lib/errors';
 
 const schema = z
   .object({
@@ -43,8 +44,7 @@ export default function ResetPasswordPage() {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      setServerError(error?.response?.data?.error ?? 'Error al restablecer la contraseña');
+      setServerError(getErrorMessage(err, 'Error al restablecer la contraseña'));
     }
   };
 

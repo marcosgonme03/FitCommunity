@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2, Check } from 'lucide-react';
 import authService from '../../services/auth.service';
 import Logo from '../../components/ui/Logo';
+import { getErrorMessage } from '../../lib/errors';
 
 const registerSchema = z
   .object({
@@ -86,9 +87,7 @@ export default function RegisterPage() {
       });
       setSuccess(true);
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: unknown } } };
-      const raw = error?.response?.data?.error;
-      setServerError(typeof raw === 'string' ? raw : 'Error al registrarse');
+      setServerError(getErrorMessage(err, 'Error al registrarse'));
     }
   };
 
