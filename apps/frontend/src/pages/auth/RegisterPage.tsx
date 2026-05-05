@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -66,6 +66,7 @@ export default function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [slowHint, setSlowHint] = useState(false);
 
   const {
     register,
@@ -75,6 +76,13 @@ export default function RegisterPage() {
   } = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
 
   const passwordValue = watch('password', '');
+
+  // Hint de cold start: si la petición tarda más de 8s, avisamos al usuario.
+  useEffect(() => {
+    if (!isSubmitting) { setSlowHint(false); return; }
+    const t = setTimeout(() => setSlowHint(true), 8000);
+    return () => clearTimeout(t);
+  }, [isSubmitting]);
 
   const onSubmit = async (data: RegisterForm) => {
     setServerError(null);
@@ -131,6 +139,17 @@ export default function RegisterPage() {
             <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-300 text-red-600 text-sm">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <span>{serverError}</span>
+            </div>
+          )}
+
+          {/* Cold start hint (Render free tier) */}
+          {isSubmitting && slowHint && !serverError && (
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+              <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin" />
+              <span>
+                El servidor est&aacute; despertando, esto puede tardar hasta un minuto la
+                primera vez. Sigue cargando, no recargues la p&aacute;gina&hellip;
+              </span>
             </div>
           )}
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,6 +28,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [needsTotp, setNeedsTotp] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [slowHint, setSlowHint] = useState(false);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
 
@@ -36,6 +37,14 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
+
+  // Si la petición tarda más de 8 s mostramos un hint sobre el cold start de
+  // Render — para que el usuario sepa que no está colgado.
+  useEffect(() => {
+    if (!isSubmitting) { setSlowHint(false); return; }
+    const t = setTimeout(() => setSlowHint(true), 8000);
+    return () => clearTimeout(t);
+  }, [isSubmitting]);
 
   const onSubmit = async (data: LoginForm) => {
     setServerError(null);
@@ -154,6 +163,17 @@ export default function LoginPage() {
               <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm animate-fade-in">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span className="font-medium">{serverError}</span>
+              </div>
+            )}
+
+            {/* Cold start hint (Render free tier) */}
+            {isSubmitting && slowHint && !serverError && (
+              <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm animate-fade-in">
+                <Loader2 className="w-4 h-4 mt-0.5 shrink-0 animate-spin" />
+                <span>
+                  El servidor est&aacute; despertando, esto puede tardar hasta un minuto la
+                  primera vez. Sigue cargando, no recargues la p&aacute;gina&hellip;
+                </span>
               </div>
             )}
 

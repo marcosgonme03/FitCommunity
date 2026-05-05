@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import authService from '../services/auth.service';
+import { warmupBackend } from '../services/api';
 
 /**
  * Initialize auth state on app start.
@@ -14,6 +15,11 @@ export function useInitAuth() {
     let cancelled = false;
 
     async function init() {
+      // Warmup: dispara un GET /health para que Render salga del cold start
+      // antes de que el usuario intente autenticarse. No bloqueante: si falla,
+      // la propia petición de refresh lo despertará igualmente.
+      void warmupBackend();
+
       try {
         // Try silent refresh — will fail fast if no cookie or backend is down
         const { accessToken } = await authService.refreshToken();
