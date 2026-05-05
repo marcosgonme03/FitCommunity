@@ -24,6 +24,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const setAccessToken = useAuthStore((s) => s.setAccessToken);
 
   const [showPassword, setShowPassword] = useState(false);
   const [needsTotp, setNeedsTotp] = useState(false);
@@ -50,6 +51,12 @@ export default function LoginPage() {
     setServerError(null);
     try {
       const { accessToken } = await authService.login(data);
+      // IMPORTANTE: guardar el token en el store ANTES de llamar getMe(), para
+      // que el interceptor de axios lo encuentre y añada el Authorization header.
+      // Sin esto, getMe() falla con 401, el interceptor intenta refrescar y, en
+      // móvil donde la cookie cross-site está bloqueada (Safari iOS ITP), el
+      // refresh falla → window.location.href='/login' → bucle de login.
+      setAccessToken(accessToken);
       const user = await authService.getMe();
       setAuth(user, accessToken);
 
