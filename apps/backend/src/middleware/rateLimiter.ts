@@ -22,15 +22,23 @@ export const generalRateLimiter = rateLimit({
 });
 
 /**
- * Strict auth rate limiter (register, login, forgot-password)
+ * Rate limiter para endpoints de autenticación (register, login).
+ *
+ * Sólo cuenta peticiones que terminan en error (4xx/5xx) — un login correcto
+ * no penaliza, así un usuario legítimo que recuerda mal una contraseña no se
+ * queda fuera tras un par de intentos exitosos previos.
+ *
+ * El máximo es generoso (20 fallos / 15 min / IP) porque en redes con NAT
+ * (oficinas, móvil 4G) muchos usuarios comparten IP, y queremos proteger contra
+ * fuerza bruta sin lockear a usuarios legítimos.
  */
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: config.AUTH_RATE_LIMIT_MAX,
+  max: Math.max(config.AUTH_RATE_LIMIT_MAX, 20),
   standardHeaders: true,
   legacyHeaders: false,
   handler: rateLimitHandler,
-  skipSuccessfulRequests: false,
+  skipSuccessfulRequests: true,
   keyGenerator: (req) => req.ip ?? 'unknown',
 });
 
