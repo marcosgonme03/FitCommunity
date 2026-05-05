@@ -34,26 +34,5 @@ export default defineConfig({
   },
   build: {
     sourcemap: false,
-    // Chunks separados para mejor caching y carga incremental
-    rollupOptions: {
-      output: {
-        manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            // React core
-            if (id.includes('react-dom') || id.includes('/react/') || id.includes('react-router')) {
-              return 'react-vendor';
-            }
-            // Iconos
-            if (id.includes('lucide-react')) return 'icons';
-            // Forms / validación
-            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
-              return 'forms';
-            }
-            // Resto de vendor
-            return 'vendor';
-          }
-        },
-      },
-    },
   },
 });
