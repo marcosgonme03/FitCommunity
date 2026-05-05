@@ -46,17 +46,28 @@ const verify2FASchema = z.object({
 const REFRESH_COOKIE = 'refreshToken';
 
 function setRefreshCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie(REFRESH_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: isProd, // requerido cuando sameSite=none
+    // En producción frontend y backend están en dominios distintos
+    // (fitcommunity.es ↔ fitcommunity.onrender.com), por lo que la cookie
+    // de refresh debe poder viajar cross-site → sameSite: 'none'.
+    // En dev usamos 'lax' para que cookies funcionen entre puertos.
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: '/api/auth',
   });
 }
 
 function clearRefreshCookie(res: Response): void {
-  res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie(REFRESH_COOKIE, {
+    path: '/api/auth',
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+  });
 }
 
 // ─── Controllers ─────────────────────────────────────────────────────────────

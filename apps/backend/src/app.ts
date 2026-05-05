@@ -19,7 +19,33 @@ const app = express();
 app.use(helmet());
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
-// In development we allow any localhost port so Vite can use 5173/5174/5175 etc.
+// En dev permitimos cualquier puerto de localhost (5173/5174/5175...).
+// En producción aceptamos el FRONTEND_URL configurado, su contraparte con/sin
+// "www." (para que da igual si el usuario entra a fitcommunity.es o a
+// www.fitcommunity.es) y los previews de Vercel (*.vercel.app).
+function buildAllowedOrigins(): Set<string> {
+  const allowed = new Set<string>();
+  try {
+    const base = new URL(config.FRONTEND_URL);
+    allowed.add(base.origin);
+    // Toggle www. ↔ apex
+    if (base.hostname.startsWith('www.')) {
+      const apex = new URL(base.origin);
+      apex.hostname = base.hostname.slice(4);
+      allowed.add(apex.origin);
+    } else {
+      const www = new URL(base.origin);
+      www.hostname = `www.${base.hostname}`;
+      allowed.add(www.origin);
+    }
+  } catch {
+    // Si FRONTEND_URL no es una URL válida, simplemente no añadimos nada extra.
+  }
+  return allowed;
+}
+
+const allowedOrigins = buildAllowedOrigins();
+
 const corsOrigin =
   config.NODE_ENV === 'development'
     ? (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
@@ -34,7 +60,19 @@ const corsOrigin =
         }
         return cb(null, false);
       }
-    : config.FRONTEND_URL;
+    : (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
+        if (!origin) return cb(null, true); // same-origin / curl / Postman
+        if (allowedOrigins.has(origin)) return cb(null, true);
+        // Vercel preview deployments (e.g. https://fitcommunity-xxxx.vercel.app)
+        try {
+          const url = new URL(origin);
+          if (url.hostname.endsWith('.vercel.app')) return cb(null, true);
+        } catch {
+          return cb(null, false);
+        }
+        logger.warn(`[CORS] Origen rechazado: ${origin}`);
+        return cb(null, false);
+      };
 
 app.use(
   cors({
