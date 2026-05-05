@@ -4,7 +4,7 @@ import { Sparkles, Globe, UserPlus } from 'lucide-react';
 import feedService from '../services/feed.service';
 import workoutsService from '../services/workouts.service';
 import usersService from '../services/users.service';
-import { Workout, SuggestedUser } from '../types';
+import { Workout, FeedWorkout, SuggestedUser } from '../types';
 import WorkoutCard from '../components/ui/WorkoutCard';
 import EmptyState from '../components/ui/EmptyState';
 import Spinner from '../components/ui/Spinner';
@@ -53,7 +53,7 @@ export default function FeedPage() {
     usersService.getSuggestions(5).then((s) => setSuggestions(s.items)).catch(() => undefined);
   }, []);
 
-  async function handleLike(workout: Workout) {
+  async function handleLike(workout: Workout | FeedWorkout) {
     const newLiked = !workout.viewerLiked;
     setWorkouts((prev) =>
       prev.map((w) =>

@@ -435,7 +435,7 @@ export default function AdminUsersPage() {
                       <span className={`text-xs font-bold uppercase tracking-wider
                                        ${u.role === 'ADMIN'
                                          ? 'text-brand-600'
-                                         : u.role === 'MODERATOR'
+                                         : (u.role as string) === 'MODERATOR'
                                            ? 'text-purple-600'
                                            : 'text-surface-500'}`}>
                         {u.role}

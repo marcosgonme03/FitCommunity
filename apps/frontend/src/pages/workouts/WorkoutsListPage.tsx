@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Dumbbell, X } from 'lucide-react';
 import workoutsService, { ListWorkoutsFilters } from '../../services/workouts.service';
-import { Workout, IntensityLevel } from '../../types';
+import { Workout, FeedWorkout, IntensityLevel } from '../../types';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
 import Spinner from '../../components/ui/Spinner';
@@ -43,7 +43,7 @@ export default function WorkoutsListPage() {
     setFilters({ page: 1, limit: 20 });
   }
 
-  async function handleLikeToggle(workout: Workout) {
+  async function handleLikeToggle(workout: Workout | FeedWorkout) {
     const newLiked = !workout.viewerLiked;
     setWorkouts((prev) =>
       prev.map((w) =>

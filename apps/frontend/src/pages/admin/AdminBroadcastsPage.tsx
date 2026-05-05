@@ -427,7 +427,7 @@ export default function AdminBroadcastsPage() {
             </div>
           ) : campaigns.length === 0 ? (
             <EmptyState
-              icon={<Megaphone className="w-8 h-8 text-surface-300" />}
+              icon={Megaphone}
               title="Sin campañas todavía"
               description="Cuando envíes tu primer broadcast, aparecerá aquí."
             />
