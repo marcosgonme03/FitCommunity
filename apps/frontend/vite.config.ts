@@ -46,36 +46,14 @@ export default defineConfig({
     // Target moderno → menos polyfills, JS más pequeño
     target: 'es2020',
     cssCodeSplit: true,
-    rollupOptions: {
-      output: {
-        // Manual chunking: separamos vendors estables del código de la app.
-        // Los chunks vendor cambian poco entre deploys → caché del navegador
-        // se reutiliza, las páginas posteriores cargan en milisegundos.
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (
-              id.includes('react-dom') ||
-              id.includes('scheduler') ||
-              id.match(/[\\/]react[\\/]/)
-            ) {
-              return 'vendor-react';
-            }
-            if (id.includes('react-router')) return 'vendor-router';
-            if (id.includes('lucide-react')) return 'vendor-icons';
-            if (
-              id.includes('react-hook-form') ||
-              id.includes('@hookform') ||
-              id.includes('zod')
-            ) {
-              return 'vendor-forms';
-            }
-            if (id.includes('axios')) return 'vendor-http';
-            if (id.includes('zustand')) return 'vendor-state';
-            // Resto de dependencias → un único bundle vendor
-            return 'vendor';
-          }
-        },
-      },
-    },
+    // ─────────────────────────────────────────────────────────────────────
+    // NOTA SOBRE manualChunks: dejamos que Vite/Rollup decida el chunking
+    // automático. Antes intentábamos partir React, router, lucide, etc. en
+    // chunks separados, pero eso provocaba un error de "useState is undefined"
+    // en producción cuando un chunk dependiente cargaba antes que el chunk
+    // de React por timing. El auto-chunking respeta el grafo de imports y
+    // es seguro a costa de tener un único `vendor` algo más grande — la
+    // diferencia de tamaño es imperceptible una vez gzipeado.
+    // ─────────────────────────────────────────────────────────────────────
   },
 });
