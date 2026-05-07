@@ -95,6 +95,8 @@ export const adminService = {
     status?: UserStatus;
     role?: 'USER' | 'ADMIN';
     isPremium?: boolean;
+    location?: string;
+    experienceLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'PROFESSIONAL';
     sortBy?: 'createdAt' | 'workouts' | 'lastLogin';
     sortDir?: 'asc' | 'desc';
   }) {
@@ -108,6 +110,18 @@ export const adminService = {
         { profile: { username: { contains: opts.search, mode: 'insensitive' } } },
         { profile: { display_name: { contains: opts.search, mode: 'insensitive' } } },
       ];
+    }
+
+    // Filtros que viven en el perfil (location, nivel) -> relacion profile.is
+    const profileFilters: Prisma.UserProfileWhereInput = {};
+    if (opts.location && opts.location.trim().length > 0) {
+      profileFilters.location = { contains: opts.location.trim(), mode: 'insensitive' };
+    }
+    if (opts.experienceLevel) {
+      profileFilters.experience_level = opts.experienceLevel;
+    }
+    if (Object.keys(profileFilters).length > 0) {
+      where.profile = profileFilters;
     }
 
     const skip = (opts.page - 1) * opts.limit;

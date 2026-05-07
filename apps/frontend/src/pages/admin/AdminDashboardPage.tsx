@@ -29,6 +29,7 @@ import adminService, {
 import { AdminOverview } from '../../types';
 import StatCard from '../../components/ui/StatCard';
 import Spinner from '../../components/ui/Spinner';
+import { readCache, staleWhileRevalidate } from '../../lib/cache';
 import LineChart from '../../components/charts/LineChart';
 import BarChart from '../../components/charts/BarChart';
 import DonutChart from '../../components/charts/DonutChart';
@@ -37,31 +38,72 @@ import { MUSCLE_LABELS, MUSCLE_COLORS } from '../../lib/muscles';
 import { formatNumber, formatMinutesAsHours } from '../../lib/format';
 import type { MuscleGroup } from '../../types';
 
+interface CachedWorkoutsStats {
+  byDay: WorkoutsStatsBucket[];
+  byMuscle: Array<{ muscle: string; count: number }>;
+}
+
 export default function AdminDashboardPage() {
-  const [overview, setOverview] = useState<AdminOverview | null>(null);
-  const [growth, setGrowth] = useState<UsersGrowthPoint[]>([]);
-  const [workoutsByDay, setWorkoutsByDay] = useState<WorkoutsStatsBucket[]>([]);
-  const [byMuscle, setByMuscle] = useState<Array<{ muscle: string; count: number }>>([]);
-  const [revenue, setRevenue] = useState<RevenueGrowthPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Hidratación inicial desde cache: si el admin abrió antes el dashboard,
+  // el render es instantáneo con los últimos datos vistos. Si no, arrancamos
+  // con valores vacíos y cargamos en paralelo sin bloquear el layout.
+  const [overview, setOverview] = useState<AdminOverview | null>(
+    () => readCache<AdminOverview>('admin:overview'),
+  );
+  const [growth, setGrowth] = useState<UsersGrowthPoint[]>(
+    () => readCache<UsersGrowthPoint[]>('admin:growth') ?? [],
+  );
+  const cachedWs = readCache<CachedWorkoutsStats>('admin:workouts-stats');
+  const [workoutsByDay, setWorkoutsByDay] = useState<WorkoutsStatsBucket[]>(cachedWs?.byDay ?? []);
+  const [byMuscle, setByMuscle] = useState<Array<{ muscle: string; count: number }>>(
+    cachedWs?.byMuscle ?? [],
+  );
+  const [revenue, setRevenue] = useState<RevenueGrowthPoint[]>(
+    () => readCache<RevenueGrowthPoint[]>('admin:revenue') ?? [],
+  );
+  // Sólo bloqueamos con spinner si NO había nada en cache — primer visitante
+  const hadCache = !!overview;
+  const [loading, setLoading] = useState(!hadCache);
   const [health, setHealth] = useState<SystemHealth | null>(null);
 
+  // Carga independiente de cada panel — ya no bloqueamos con Promise.all.
+  // Si una llamada tarda, las otras se pintan igual. Si todas están en cache,
+  // el render es inmediato y solo refrescamos los datos en background.
   useEffect(() => {
-    Promise.all([
-      adminService.overview(),
-      adminService.usersGrowth(30),
-      adminService.workoutsStats(30),
-      adminService.revenueGrowth(30),
-    ])
-      .then(([ov, ug, ws, rev]) => {
-        setOverview(ov);
-        setGrowth(ug.points);
-        setWorkoutsByDay(ws.byDay);
-        setByMuscle(ws.byMuscle ?? []);
-        setRevenue(rev.points);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let alive = true;
+    let pending = 4;
+    const onSettled = () => {
+      pending--;
+      if (pending === 0 && alive) setLoading(false);
+    };
+
+    void staleWhileRevalidate('admin:overview', () => adminService.overview(), (v) => {
+      if (alive) setOverview(v);
+    }).finally(onSettled);
+
+    void staleWhileRevalidate(
+      'admin:growth',
+      () => adminService.usersGrowth(30).then((r) => r.points),
+      (v) => { if (alive) setGrowth(v); },
+    ).finally(onSettled);
+
+    void staleWhileRevalidate(
+      'admin:workouts-stats',
+      () => adminService.workoutsStats(30),
+      (v) => {
+        if (!alive) return;
+        setWorkoutsByDay(v.byDay);
+        setByMuscle(v.byMuscle ?? []);
+      },
+    ).finally(onSettled);
+
+    void staleWhileRevalidate(
+      'admin:revenue',
+      () => adminService.revenueGrowth(30).then((r) => r.points),
+      (v) => { if (alive) setRevenue(v); },
+    ).finally(onSettled);
+
+    return () => { alive = false; };
   }, []);
 
   // Health check — fetches immediately and refreshes every 30 s
@@ -77,7 +119,11 @@ export default function AdminDashboardPage() {
     return () => { alive = false; clearInterval(interval); };
   }, []);
 
-  if (loading || !overview) return <Spinner fullScreen label="Cargando analytics..." />;
+  // Sólo mostramos el spinner full-screen al usuario que entra POR PRIMERA
+  // VEZ y no tenía ningún dato en cache. Cualquier visita posterior (que es
+  // el caso del 99% del tiempo) ve la página completa al instante.
+  if (loading && !overview) return <Spinner fullScreen label="Cargando analytics..." />;
+  if (!overview) return <Spinner fullScreen label="Cargando analytics..." />;
 
   const top5Muscles = byMuscle.slice(0, 5);
   const totalRevenue30d = revenue.reduce((sum, r) => sum + r.revenueEur, 0);

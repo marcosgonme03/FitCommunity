@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   Search, Ban, Trash2, ShieldCheck, ShieldOff, Filter, X, MessageSquare, Crown,
-  ArrowUp, ArrowDown, ArrowUpDown, BadgeCheck, Shield, Download, Users as UsersIcon,
-  AlertTriangle, Activity, LogOut,
+  ArrowUp, ArrowDown, ArrowUpDown, BadgeCheck, Shield, FileSpreadsheet, FileText, Users as UsersIcon,
+  AlertTriangle, Activity, LogOut, MapPin,
 } from 'lucide-react';
 import adminService from '../../services/admin.service';
 import { AdminUserListItem, UserStatus } from '../../types';
-import type { UsersSummary } from '../../services/admin.service';
+import type { UsersSummary, ExperienceLevel } from '../../services/admin.service';
+import { readCache, writeCache } from '../../lib/cache';
 import Avatar from '../../components/ui/Avatar';
 import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
@@ -31,30 +32,51 @@ const STATUS_COLORS: Record<UserStatus, string> = {
   PENDING_VERIFICATION: 'bg-amber-100 text-amber-700 border-amber-200',
 };
 
+const EXPERIENCE_LABELS: Record<ExperienceLevel, string> = {
+  BEGINNER: 'Principiante',
+  INTERMEDIATE: 'Intermedio',
+  ADVANCED: 'Avanzado',
+  PROFESSIONAL: 'Profesional',
+};
+
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<AdminUserListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Cache de la primera página (filtros por defecto). En navegaciones
+  // posteriores el panel aparece al instante con la última lista vista,
+  // y en background se refresca con los datos actuales.
+  const [users, setUsers] = useState<AdminUserListItem[]>(
+    () => readCache<AdminUserListItem[]>('admin:users-first-page') ?? [],
+  );
+  const [loading, setLoading] = useState(() => {
+    const cached = readCache<AdminUserListItem[]>('admin:users-first-page');
+    return !cached || cached.length === 0;
+  });
   const [filters, setFilters] = useState<{
     page: number;
     limit: number;
     search?: string;
     status?: UserStatus;
     isPremium?: boolean;
+    location?: string;
+    experienceLevel?: ExperienceLevel;
     sortBy?: 'createdAt' | 'workouts' | 'lastLogin';
     sortDir?: 'asc' | 'desc';
   }>({ page: 1, limit: 25, sortBy: 'createdAt', sortDir: 'desc' });
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [searchInput, setSearchInput] = useState('');
+  const [locationInput, setLocationInput] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Resumen agregado
-  const [summary, setSummary] = useState<UsersSummary | null>(null);
+  // Resumen agregado (también con cache stale-while-revalidate)
+  const [summary, setSummary] = useState<UsersSummary | null>(
+    () => readCache<UsersSummary>('admin:users-summary'),
+  );
 
   // Drawer de detalle
   const [detailUserId, setDetailUserId] = useState<string | null>(null);
 
-  // CSV export state
-  const [exporting, setExporting] = useState(false);
+  // Estado de las exportaciones
+  const [exportingXlsx, setExportingXlsx] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Force logout state
   const [forceLogoutUser, setForceLogoutUser] = useState<AdminUserListItem | null>(null);
@@ -71,8 +93,14 @@ export default function AdminUsersPage() {
   const [dmBody, setDmBody] = useState('');
   const [dmLoading, setDmLoading] = useState(false);
 
+  /**
+   * Carga la lista de usuarios. Solo mostramos el spinner full-screen si no
+   * tenemos NADA que enseñar (lista vacía). En cualquier otro caso seguimos
+   * pintando lo anterior y los datos se actualizan cuando llegan — esto
+   * evita el "parpadeo" de pantalla blanca al cambiar de página o filtro.
+   */
   function load() {
-    setLoading(true);
+    if (users.length === 0) setLoading(true);
     adminService
       .listUsers(filters)
       .then((res) => {
@@ -82,13 +110,30 @@ export default function AdminUsersPage() {
           totalPages: res.pagination.totalPages,
           total: res.pagination.total,
         });
+
+        // Cacheamos solo la primera página con filtros por defecto, que es
+        // la "vista inicial" del admin. Cualquier filtro/búsqueda específicos
+        // no merece la pena cachearlos: cambian mucho y ocupan localStorage.
+        const isDefaultView =
+          filters.page === 1 &&
+          !filters.search &&
+          !filters.status &&
+          filters.isPremium === undefined &&
+          !filters.location &&
+          !filters.experienceLevel;
+        if (isDefaultView) writeCache('admin:users-first-page', res.items);
       })
       .catch(() => toast.error('Error', 'No se pudieron cargar los usuarios'))
       .finally(() => setLoading(false));
   }
 
   function loadSummary() {
-    adminService.getUsersSummary().then(setSummary).catch(() => undefined);
+    adminService.getUsersSummary()
+      .then((s) => {
+        setSummary(s);
+        writeCache('admin:users-summary', s);
+      })
+      .catch(() => undefined);
   }
 
   useEffect(load, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -111,20 +156,40 @@ export default function AdminUsersPage() {
       : <ArrowDown className="w-3 h-3" />;
   }
 
-  async function handleExportCsv() {
-    if (exporting) return;
-    setExporting(true);
+  /** Filtros aplicados a las exportaciones (idénticos a los de la tabla actual) */
+  function exportFilters() {
+    return {
+      search: filters.search,
+      status: filters.status,
+      isPremium: filters.isPremium,
+      location: filters.location,
+      experienceLevel: filters.experienceLevel,
+    };
+  }
+
+  async function handleExportXlsx() {
+    if (exportingXlsx) return;
+    setExportingXlsx(true);
     try {
-      await adminService.exportUsersCsv({
-        search: filters.search,
-        status: filters.status,
-        isPremium: filters.isPremium,
-      });
-      toast.success('Descarga iniciada');
+      await adminService.exportUsersXlsx(exportFilters());
+      toast.success('Excel descargado', 'Archivo .xlsx generado con los filtros actuales');
     } catch {
-      toast.error('Error', 'No se pudo exportar CSV');
+      toast.error('Error', 'No se pudo exportar a Excel');
     } finally {
-      setExporting(false);
+      setExportingXlsx(false);
+    }
+  }
+
+  async function handleExportPdf() {
+    if (exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      await adminService.exportUsersPdf(exportFilters());
+      toast.success('PDF descargado', 'Archivo PDF generado con los filtros actuales');
+    } catch {
+      toast.error('Error', 'No se pudo exportar a PDF');
+    } finally {
+      setExportingPdf(false);
     }
   }
 
@@ -144,7 +209,36 @@ export default function AdminUsersPage() {
 
   function applySearch(e: React.FormEvent) {
     e.preventDefault();
-    setFilters((f) => ({ ...f, search: searchInput || undefined, page: 1 }));
+    setFilters((f) => ({
+      ...f,
+      search: searchInput || undefined,
+      location: locationInput.trim() || undefined,
+      page: 1,
+    }));
+  }
+
+  function clearAllFilters() {
+    setSearchInput('');
+    setLocationInput('');
+    setFilters((f) => ({
+      ...f,
+      search: undefined,
+      status: undefined,
+      isPremium: undefined,
+      location: undefined,
+      experienceLevel: undefined,
+      page: 1,
+    }));
+  }
+
+  /** Devuelve el número total de filtros activos (para el badge "Filtros (3)") */
+  function activeFilterCount(): number {
+    let n = 0;
+    if (filters.status) n++;
+    if (filters.isPremium !== undefined) n++;
+    if (filters.location) n++;
+    if (filters.experienceLevel) n++;
+    return n;
   }
 
   async function handleBan() {
@@ -231,14 +325,26 @@ export default function AdminUsersPage() {
               : 'Sin resultados'}
           </p>
         </div>
-        <Button
-          variant="outline"
-          leftIcon={<Download className="w-4 h-4" />}
-          loading={exporting}
-          onClick={handleExportCsv}
-        >
-          Exportar CSV
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            leftIcon={<FileSpreadsheet className="w-4 h-4 text-emerald-600" />}
+            loading={exportingXlsx}
+            onClick={handleExportXlsx}
+            title="Exporta los usuarios filtrados a un fichero Excel profesional"
+          >
+            Exportar Excel
+          </Button>
+          <Button
+            variant="outline"
+            leftIcon={<FileText className="w-4 h-4 text-red-600" />}
+            loading={exportingPdf}
+            onClick={handleExportPdf}
+            title="Exporta los usuarios filtrados a un PDF tabulado"
+          >
+            Exportar PDF
+          </Button>
+        </div>
       </header>
 
       {/* Banda de resumen agregado */}
@@ -271,7 +377,12 @@ export default function AdminUsersPage() {
             leftIcon={<Filter className="w-4 h-4" />}
             onClick={() => setShowFilters((v) => !v)}
           >
-            {filters.status ? STATUS_LABELS[filters.status] : 'Estado'}
+            Filtros
+            {activeFilterCount() > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold">
+                {activeFilterCount()}
+              </span>
+            )}
           </Button>
           <Button type="submit">Buscar</Button>
         </form>
@@ -336,13 +447,91 @@ export default function AdminUsersPage() {
                 </button>
               </div>
             </div>
-            {(filters.status || filters.isPremium !== undefined) && (
+            {/* ── Filtro por ciudad / location ─────────────────────────── */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-surface-500 mb-1.5">
+                Ciudad / Provincia
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <div className="relative flex-1 min-w-[200px] max-w-md">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-surface-400" />
+                  <input
+                    type="text"
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        setFilters((f) => ({ ...f, location: locationInput.trim() || undefined, page: 1 }));
+                      }
+                    }}
+                    placeholder="Ej: Valencia, Madrid, Barcelona..."
+                    className="input-field pl-10 text-sm"
+                    maxLength={80}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFilters((f) => ({ ...f, location: locationInput.trim() || undefined, page: 1 }))}
+                >
+                  Aplicar
+                </Button>
+                {filters.location && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocationInput('');
+                      setFilters((f) => ({ ...f, location: undefined, page: 1 }));
+                    }}
+                    className="text-xs text-surface-500 hover:text-surface-900 inline-flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" />
+                    {filters.location}
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-surface-400 mt-1">
+                Búsqueda parcial sin distinguir mayúsculas (ej. "valen" encuentra Valencia y Valencia de Don Juan)
+              </p>
+            </div>
+
+            {/* ── Filtro por nivel de experiencia ──────────────────────── */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-surface-500 mb-1.5">Nivel</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setFilters({ ...filters, experienceLevel: undefined, page: 1 })}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all
+                              ${!filters.experienceLevel
+                                ? 'bg-brand-100 text-brand-700 border-brand-300'
+                                : 'bg-white text-surface-600 border-surface-200 hover:bg-surface-50'}`}
+                >
+                  Todos
+                </button>
+                {(Object.keys(EXPERIENCE_LABELS) as ExperienceLevel[]).map((lvl) => (
+                  <button
+                    key={lvl}
+                    onClick={() => setFilters({ ...filters, experienceLevel: lvl, page: 1 })}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all
+                                ${filters.experienceLevel === lvl
+                                  ? 'bg-brand-100 text-brand-700 border-brand-300'
+                                  : 'bg-white text-surface-600 border-surface-200 hover:bg-surface-50'}`}
+                  >
+                    {EXPERIENCE_LABELS[lvl]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {activeFilterCount() > 0 && (
               <button
-                onClick={() => setFilters({ ...filters, status: undefined, isPremium: undefined, page: 1 })}
+                onClick={clearAllFilters}
                 className="text-xs text-surface-500 hover:text-surface-900 inline-flex items-center gap-1"
               >
                 <X className="w-3 h-3" />
-                Limpiar todos los filtros
+                Limpiar todos los filtros ({activeFilterCount()})
               </button>
             )}
           </div>
@@ -370,6 +559,9 @@ export default function AdminUsersPage() {
                   <th className="px-4 py-3 font-semibold text-surface-500 text-xs uppercase tracking-wider">Estado</th>
                   <th className="px-4 py-3 font-semibold text-surface-500 text-xs uppercase tracking-wider">Plan</th>
                   <th className="px-4 py-3 font-semibold text-surface-500 text-xs uppercase tracking-wider">Rol</th>
+                  <th className="px-4 py-3 font-semibold text-surface-500 text-xs uppercase tracking-wider hidden xl:table-cell">
+                    Ciudad
+                  </th>
                   <th className="px-4 py-3 font-semibold text-surface-500 text-xs uppercase tracking-wider hidden md:table-cell">
                     <button
                       onClick={() => toggleSort('workouts')}
@@ -440,6 +632,16 @@ export default function AdminUsersPage() {
                                            : 'text-surface-500'}`}>
                         {u.role}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      {u.location ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-surface-700">
+                          <MapPin className="w-3 h-3 text-surface-400" />
+                          {u.location}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-surface-300 italic">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-surface-700 font-semibold hidden md:table-cell">
                       {u.workoutsCount}

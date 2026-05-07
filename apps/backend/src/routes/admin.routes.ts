@@ -174,7 +174,9 @@ router.get('/activity-feed', ctrl.activityFeed);
 // User management
 router.get('/users', validate(listUsersQuerySchema, 'query'), ctrl.listUsers);
 router.get('/users/summary', ctrl.usersSummary);
-router.get('/users/export', ctrl.exportUsersCsv);
+router.get('/users/export', ctrl.exportUsersXlsx);
+router.get('/users/export/xlsx', ctrl.exportUsersXlsx);
+router.get('/users/export/pdf', ctrl.exportUsersPdf);
 router.get('/users/:id/details', ctrl.getUserDetails);
 router.post('/users/:id/ban', validate(banUserSchema), ctrl.banUser);
 router.post('/users/:id/unban', ctrl.unbanUser);

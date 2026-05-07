@@ -19,6 +19,12 @@ export const listUsersQuerySchema = z.object({
     .union([z.boolean(), z.enum(['true', 'false'])])
     .optional()
     .transform((v) => (typeof v === 'string' ? v === 'true' : v)),
+  /** Filtro por ciudad / location del perfil (contains, case-insensitive) */
+  location: z.string().trim().min(1).max(80).optional(),
+  /** Filtro por nivel de experiencia */
+  experienceLevel: z
+    .enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED', 'PROFESSIONAL'])
+    .optional(),
   sortBy: z.enum(['createdAt', 'workouts', 'lastLogin']).optional(),
   sortDir: z.enum(['asc', 'desc']).optional(),
 });

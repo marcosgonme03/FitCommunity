@@ -4,34 +4,55 @@ import authService from '../services/auth.service';
 import { warmupBackend } from '../services/api';
 
 /**
- * Initialize auth state on app start.
- * Tries to refresh the token silently. If it fails for any reason
- * (no cookie, backend unreachable, timeout), marks user as unauthenticated.
+ * Inicializa el estado de autenticación al arrancar la app.
+ *
+ * Comportamiento:
+ *   - Si hay un user cacheado en localStorage, la UI YA está pintada con esos
+ *     datos (ver authStore). Aquí lanzamos el refresh-token en silencio para
+ *     validar la sesión y conseguir un accessToken vivo. Si todo va bien, no
+ *     pasa nada visible. Si la sesión no vale, hacemos logout y router lleva
+ *     al login.
+ *   - Si NO hay user cacheado (visitante nuevo), `isLoading=true` desde el
+ *     store y se muestra el LoadingScreen hasta que el refresh decida.
+ *
+ * Esta diferencia es la clave de que la app "arranque rápido": en lugar de
+ * esperar 30-60 s al backend cold start de Render, el usuario ve la pantalla
+ * que estaba viendo y, como mucho, se entera al final si su sesión expiró.
  */
 export function useInitAuth() {
-  const { setAuth, logout } = useAuthStore();
+  const { setAuth, setUser, logout, setInitialized, setLoading, isInitialized } = useAuthStore();
 
   useEffect(() => {
+    if (isInitialized) return;
     let cancelled = false;
 
     async function init() {
       // Warmup: dispara un GET /health para que Render salga del cold start
-      // antes de que el usuario intente autenticarse. No bloqueante: si falla,
-      // la propia petición de refresh lo despertará igualmente.
+      // antes de que el usuario haga la próxima acción que requiera backend.
       void warmupBackend();
 
       try {
-        // Try silent refresh — will fail fast if no cookie or backend is down
         const { accessToken } = await authService.refreshToken();
-        const user = await authService.getMe();
-        if (!cancelled) {
-          setAuth(user, accessToken);
+        if (cancelled) return;
+        // Tenemos token vivo — pedimos /me para refrescar datos por si han
+        // cambiado (rol, premium, etc.) pero NO bloqueamos la UI por ello.
+        try {
+          const user = await authService.getMe();
+          if (!cancelled) setAuth(user, accessToken);
+        } catch {
+          // /me falla pero el token es válido — al menos guardamos el token
+          if (!cancelled) {
+            // mantenemos el user cacheado, solo actualizamos el token
+            useAuthStore.getState().setAccessToken(accessToken);
+            setLoading(false);
+            setInitialized(true);
+          }
         }
       } catch {
-        // Any error (401, timeout, network) → not authenticated
-        if (!cancelled) {
-          logout();
-        }
+        // Refresh falló: o no hay cookie, o backend caído, o sesión expirada.
+        // Limpiamos el user cacheado para que el siguiente PrivateRoute saque
+        // al usuario al login en lugar de pintar UI con datos sin token.
+        if (!cancelled) logout();
       }
     }
 
@@ -41,10 +62,26 @@ export function useInitAuth() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Refrescamos /me también cuando el documento vuelve a primer plano —
+  // si el usuario tuvo la pestaña en background un rato, sus datos pueden
+  // estar desactualizados.
+  useEffect(() => {
+    function onFocus() {
+      authService.getMe().then((u) => setUser(u)).catch(() => undefined);
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') onFocus();
+    });
+    return () => {
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 /**
- * Access the current auth state and main auth actions.
+ * Acceso al estado de auth y acciones principales.
  */
 export function useAuth() {
   const user = useAuthStore((s) => s.user);
@@ -57,7 +94,7 @@ export function useAuth() {
     try {
       await authService.logout();
     } catch {
-      // ignore — even if it fails, clear local state
+      // ignore — incluso si falla, limpiamos estado local
     }
     storeLogout();
   }

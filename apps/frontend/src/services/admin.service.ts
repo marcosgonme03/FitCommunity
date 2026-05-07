@@ -10,6 +10,22 @@ import {
   UserStatus,
 } from '../types';
 
+/**
+ * Dispara la descarga de un blob como fichero local. Encapsula el truco de
+ * crear un <a download> oculto, simular el clic y revocar el ObjectURL para
+ * que ningún consumidor tenga que repetir esta plumbing.
+ */
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export type BroadcastSegment = 'ALL' | 'PREMIUM' | 'INACTIVE_7D' | 'INACTIVE_14D' | 'NEW_USERS_7D';
 
 export interface BroadcastCampaign {
@@ -27,6 +43,8 @@ export interface BroadcastCampaign {
   };
 }
 
+export type ExperienceLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'PROFESSIONAL';
+
 export interface ListUsersFilters {
   page?: number;
   limit?: number;
@@ -34,6 +52,9 @@ export interface ListUsersFilters {
   status?: UserStatus;
   role?: 'USER' | 'ADMIN';
   isPremium?: boolean;
+  /** Ciudad / location del perfil (contiene, case-insensitive) */
+  location?: string;
+  experienceLevel?: ExperienceLevel;
   sortBy?: 'createdAt' | 'workouts' | 'lastLogin';
   sortDir?: 'asc' | 'desc';
 }
@@ -295,18 +316,37 @@ const adminService = {
     await api.post(`/admin/users/${userId}/verify-email`);
   },
 
-  /** Descarga la lista filtrada de usuarios como CSV */
+  /**
+   * Descarga la lista filtrada de usuarios como XLSX profesional (cabeceras
+   * en negrita, anchos automáticos, banded rows). Sustituye al antiguo CSV
+   * que se abría todo en una columna en Excel español.
+   */
+  async exportUsersXlsx(filters: Omit<ListUsersFilters, 'page' | 'limit'> = {}): Promise<void> {
+    const res = await api.get('/admin/users/export/xlsx', {
+      params: filters,
+      responseType: 'blob',
+    });
+    triggerDownload(
+      res.data as Blob,
+      `fitcommunity-users-${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+  },
+
+  /** Descarga la lista filtrada de usuarios como PDF tabulado A4 horizontal. */
+  async exportUsersPdf(filters: Omit<ListUsersFilters, 'page' | 'limit'> = {}): Promise<void> {
+    const res = await api.get('/admin/users/export/pdf', {
+      params: filters,
+      responseType: 'blob',
+    });
+    triggerDownload(
+      res.data as Blob,
+      `fitcommunity-users-${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
+  },
+
+  /** @deprecated usa exportUsersXlsx — el servidor ahora siempre devuelve XLSX */
   async exportUsersCsv(filters: Omit<ListUsersFilters, 'page' | 'limit'> = {}): Promise<void> {
-    const res = await api.get('/admin/users/export', { params: filters, responseType: 'blob' });
-    const filename = `fitcommunity-users-${new Date().toISOString().slice(0, 10)}.csv`;
-    const url = URL.createObjectURL(res.data as Blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    return this.exportUsersXlsx(filters);
   },
 
   // ─── Workouts moderation ───────────────────────────────────────────────

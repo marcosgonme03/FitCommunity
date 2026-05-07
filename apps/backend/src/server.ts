@@ -3,6 +3,7 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { prisma } from './lib/prisma';
 import { redis } from './lib/redis';
+import { startKeepAlive, stopKeepAlive } from './utils/keepAlive';
 
 async function bootstrap() {
   // Connect to Redis (non-blocking — app works without it in dev)
@@ -22,11 +23,17 @@ async function bootstrap() {
     logger.info(`🚀 FitCommunity API → http://localhost:${config.PORT}`);
     logger.info(`   Env:      ${config.NODE_ENV}`);
     logger.info(`   Frontend: ${config.FRONTEND_URL}`);
+
+    // En producción (Render free tier) arrancamos el keep-alive para que el
+    // servicio no se duerma tras 15 min de inactividad. Sin esto, la primera
+    // visita tras un rato muerto tarda 30-60 s en cargar.
+    startKeepAlive();
   });
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     logger.info(`${signal} — shutting down…`);
+    stopKeepAlive();
     server.close(async () => {
       await prisma.$disconnect();
       redis.disconnect();

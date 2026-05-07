@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useInitAuth, useAuth } from './hooks/useAuth';
 
@@ -65,8 +65,42 @@ function RouteFallback() {
   );
 }
 
+/**
+ * Prefetch agresivo de las rutas más probables para que la siguiente
+ * navegación sea instantánea. Lanzamos los `import()` en background sin
+ * bloquear el render — el navegador los pone en caché y, cuando el usuario
+ * hace clic, el chunk ya está descargado.
+ *
+ * Estrategia:
+ *   - Tras 1.5 s de la pantalla de login → precargamos Dashboard (la página
+ *     a la que va casi todo el mundo después).
+ *   - Tras autenticarse como ADMIN → precargamos AdminDashboard y AdminUsers.
+ */
+function usePrefetchRoutes(role: string | undefined, isAuthenticated: boolean) {
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const idle = (cb: () => void) =>
+      ('requestIdleCallback' in window
+        ? (window as unknown as { requestIdleCallback: (cb: () => void) => void })
+            .requestIdleCallback(cb)
+        : window.setTimeout(cb, 250));
+
+    idle(() => {
+      void import('./pages/DashboardPage');
+      void import('./pages/FeedPage');
+      void import('./pages/workouts/WorkoutsListPage');
+      if (role === 'ADMIN') {
+        void import('./pages/admin/AdminDashboardPage');
+        void import('./pages/admin/AdminUsersPage');
+      }
+    });
+  }, [isAuthenticated, role]);
+}
+
 function AppRoutes() {
   useInitAuth();
+  const { user, isAuthenticated } = useAuth();
+  usePrefetchRoutes(user?.role, isAuthenticated);
 
   return (
     <>

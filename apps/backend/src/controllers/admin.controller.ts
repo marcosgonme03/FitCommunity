@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import { adminService } from '../services/admin.service';
+import { buildUsersXlsx, buildUsersPdf, ExportUsersFilters } from '../services/admin.export.service';
 import { sendSuccess, sendPaginated } from '../utils/apiResponse';
 import { AppError } from '../middleware/errorHandler';
 import { prisma } from '../lib/prisma';
@@ -81,6 +82,10 @@ export async function listUsers(req: AuthRequest, res: Response, next: NextFunct
       status?: 'ACTIVE' | 'INACTIVE' | 'BANNED' | 'PENDING_VERIFICATION';
       role?: 'USER' | 'ADMIN';
       isPremium?: string | boolean;
+      location?: string;
+      experienceLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'PROFESSIONAL';
+      sortBy?: 'createdAt' | 'workouts' | 'lastLogin';
+      sortDir?: 'asc' | 'desc';
     };
     let isPremium: boolean | undefined;
     if (q.isPremium === true || q.isPremium === 'true') isPremium = true;
@@ -93,6 +98,10 @@ export async function listUsers(req: AuthRequest, res: Response, next: NextFunct
       status: q.status,
       role: q.role,
       isPremium,
+      location: q.location,
+      experienceLevel: q.experienceLevel,
+      sortBy: q.sortBy,
+      sortDir: q.sortDir,
     });
     sendPaginated(res, result.items, result.pagination);
   } catch (e) {
@@ -178,32 +187,68 @@ export async function activityFeed(req: AuthRequest, res: Response, next: NextFu
   }
 }
 
-export async function exportUsersCsv(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+/**
+ * Lee filtros comunes desde la querystring para los endpoints de exportacion.
+ * Se admiten los mismos filtros que `listUsers` para que el fichero exportado
+ * coincida exactamente con lo que el admin esta viendo en pantalla.
+ */
+function parseExportFilters(req: AuthRequest): ExportUsersFilters {
+  const q = req.query as {
+    search?: string;
+    status?: 'ACTIVE' | 'INACTIVE' | 'BANNED' | 'PENDING_VERIFICATION';
+    role?: 'USER' | 'ADMIN';
+    isPremium?: string | boolean;
+    location?: string;
+    experienceLevel?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'PROFESSIONAL';
+  };
+  let isPremium: boolean | undefined;
+  if (q.isPremium === true || q.isPremium === 'true') isPremium = true;
+  else if (q.isPremium === false || q.isPremium === 'false') isPremium = false;
+
+  return {
+    search: q.search,
+    status: q.status,
+    role: q.role,
+    isPremium,
+    location: q.location,
+    experienceLevel: q.experienceLevel,
+  };
+}
+
+/**
+ * GET /admin/users/export -- exporta a XLSX con estilo profesional.
+ * Mantenemos la ruta original por compatibilidad (antes generaba CSV) pero
+ * ahora devuelve un Excel real con cabeceras en negrita, anchos automaticos
+ * y banded rows. Excel lo abre directamente sin "todo en una columna".
+ */
+export async function exportUsersXlsx(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const q = req.query as {
-      search?: string;
-      status?: 'ACTIVE' | 'INACTIVE' | 'BANNED' | 'PENDING_VERIFICATION';
-      role?: 'USER' | 'ADMIN';
-      isPremium?: string | boolean;
-    };
-    let isPremium: boolean | undefined;
-    if (q.isPremium === true || q.isPremium === 'true') isPremium = true;
-    else if (q.isPremium === false || q.isPremium === 'false') isPremium = false;
+    const filters = parseExportFilters(req);
+    const buffer = await buildUsersXlsx(filters);
 
-    const csv = await adminService.exportUsersCsv({
-      search: q.search,
-      status: q.status,
-      role: q.role,
-      isPremium,
-    });
-
-    const filename = `fitcommunity-users-${new Date().toISOString().slice(0, 10)}.csv`;
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const filename = `fitcommunity-users-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Cache-Control', 'no-store');
-    // BOM UTF-8 para que Excel detecte bien acentos
-    res.write('﻿');
-    res.end(csv);
+    res.setHeader('Content-Length', String(buffer.length));
+    res.end(buffer);
+  } catch (e) {
+    next(e);
+  }
+}
+
+/** GET /admin/users/export/pdf -- exporta a PDF tabulado A4 horizontal. */
+export async function exportUsersPdf(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const filters = parseExportFilters(req);
+    const buffer = await buildUsersPdf(filters);
+
+    const filename = `fitcommunity-users-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Length', String(buffer.length));
+    res.end(buffer);
   } catch (e) {
     next(e);
   }

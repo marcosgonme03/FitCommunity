@@ -13,12 +13,38 @@ const API_URL = import.meta.env.VITE_API_URL ?? '/api';
  */
 const COLD_START_TIMEOUT_MS = 60_000;
 const WARM_TIMEOUT_MS = 15_000;
+const WARM_STORAGE_KEY = 'fc-backend-warm-until';
+// Si en los últimos 10 min ya hicimos una petición OK, el backend sigue
+// caliente con altísima probabilidad → arrancamos directamente con timeout
+// corto y la app responde mucho más rápido en navegaciones internas.
+const WARM_CACHE_MS = 10 * 60 * 1000;
+
+function readWarmFromStorage(): boolean {
+  try {
+    const ts = Number(sessionStorage.getItem(WARM_STORAGE_KEY) ?? '0');
+    return Number.isFinite(ts) && ts > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function writeWarmToStorage(): void {
+  try {
+    sessionStorage.setItem(WARM_STORAGE_KEY, String(Date.now() + WARM_CACHE_MS));
+  } catch {
+    // sessionStorage no disponible (incógnito en algunos navegadores) — ignorar
+  }
+}
+
+const initiallyWarm = readWarmFromStorage();
 
 export const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
-  timeout: COLD_START_TIMEOUT_MS,
+  // Si ya estaba caliente recientemente, evitamos un timeout largo inicial
+  // que retrasa el primer render percibido.
+  timeout: initiallyWarm ? WARM_TIMEOUT_MS : COLD_START_TIMEOUT_MS,
 });
 
 /**
@@ -26,9 +52,10 @@ export const api = axios.create({
  * caliente y podemos bajar el timeout para que peticiones lentas reales
  * (no cold starts) no se queden colgando un minuto.
  */
-let backendIsWarm = false;
+let backendIsWarm = initiallyWarm;
 
 function markBackendWarm(): void {
+  writeWarmToStorage();
   if (backendIsWarm) return;
   backendIsWarm = true;
   api.defaults.timeout = WARM_TIMEOUT_MS;
@@ -38,8 +65,13 @@ function markBackendWarm(): void {
  * Pinga el endpoint /health al cargar la app para que Render salga del sleep
  * antes de que el usuario haga login/register. Si falla, no pasa nada — la
  * propia petición de auth despertará al servicio.
+ *
+ * Si ya tenemos un marcador "warm" reciente en sessionStorage, no hace nada —
+ * el backend ya está caliente con altísima probabilidad y este ping solo
+ * añadiría latencia a la primera carga.
  */
 export async function warmupBackend(): Promise<void> {
+  if (backendIsWarm) return;
   try {
     await api.get('/health', { timeout: COLD_START_TIMEOUT_MS });
     markBackendWarm();
