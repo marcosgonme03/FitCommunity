@@ -41,6 +41,20 @@ const verify2FASchema = z.object({
   code: z.string().length(6, 'El código debe tener 6 dígitos').regex(/^\d+$/, 'Solo dígitos'),
 });
 
+const challengeSetupSchema = z.object({
+  setupToken: z.string().min(1, 'setupToken requerido'),
+});
+
+const challengeVerifySetupSchema = z.object({
+  pendingToken: z.string().min(1, 'pendingToken requerido'),
+  code: z.string().length(6, 'El código debe tener 6 dígitos').regex(/^\d+$/, 'Solo dígitos'),
+});
+
+const challengeVerifyLoginSchema = z.object({
+  challengeToken: z.string().min(1, 'challengeToken requerido'),
+  code: z.string().length(6, 'El código debe tener 6 dígitos').regex(/^\d+$/, 'Solo dígitos'),
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const REFRESH_COOKIE = 'refreshToken';
@@ -224,6 +238,81 @@ export async function verify2FA(req: AuthRequest, res: Response, next: NextFunct
     const { code } = verify2FASchema.parse(req.body);
     await authService.verify2FA(req.user.userId, code);
     sendSuccess(res, null, { message: '2FA activado correctamente' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/challenge/setup
+ * Genera QR + secret durante el flujo de login obligatorio para admin.
+ * No requiere JWT — usa el `setupToken` emitido por /login.
+ */
+export async function setup2FAChallenge(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { setupToken } = challengeSetupSchema.parse(req.body);
+    const result = await authService.setup2FAFromChallenge(setupToken);
+    sendSuccess(res, result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/challenge/verify-setup
+ * Verifica el TOTP introducido durante el setup obligatorio post-login.
+ * Si es válido, activa 2FA y emite los tokens de sesión definitivos.
+ */
+export async function verify2FAChallengeSetup(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { pendingToken, code } = challengeVerifySetupSchema.parse(req.body);
+    const meta = {
+      ipAddress: req.ip,
+      deviceInfo: req.headers['user-agent'],
+    };
+    const { accessToken, refreshToken } = await authService.verify2FAFromChallenge(
+      pendingToken,
+      code,
+      meta
+    );
+    setRefreshCookie(res, refreshToken);
+    sendSuccess(res, { accessToken });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/auth/2fa/challenge/verify-login
+ * Verifica el TOTP cuando el admin ya tiene 2FA activo. El frontend recibe el
+ * `challengeToken` desde /login y lo intercambia aquí por una sesión válida.
+ */
+export async function verify2FAChallengeLogin(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const { challengeToken, code } = challengeVerifyLoginSchema.parse(req.body);
+    const meta = {
+      ipAddress: req.ip,
+      deviceInfo: req.headers['user-agent'],
+    };
+    const { accessToken, refreshToken } = await authService.verifyLoginChallenge(
+      challengeToken,
+      code,
+      meta
+    );
+    setRefreshCookie(res, refreshToken);
+    sendSuccess(res, { accessToken });
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Dumbbell, Star, Trash2, Sparkles, CheckCircle2, Play, Download, Lightbulb } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Dumbbell, Star, Trash2, Sparkles, CheckCircle2, Play, Download, Lightbulb, CalendarCheck } from 'lucide-react';
 import aiService, { GenerateRoutinePayload } from '../../services/ai.service';
 import { GeneratedRoutine, FitnessGoal, ExperienceLevel } from '../../types';
 import Button from '../../components/ui/Button';
@@ -81,7 +81,7 @@ function RoutinesInner() {
   }
 
   async function deactivateRoutine() {
-    if (!confirm('¿Desactivar la rutina actual? Dejarás de ver "hoy te toca..." en el dashboard.')) return;
+    if (!confirm('¿Desactivar la rutina actual? Dejarás de ver el bloque "hoy te toca..." en el dashboard.')) return;
     try {
       await aiService.deactivateRoutine();
       toast.success('Rutina desactivada');
@@ -109,59 +109,71 @@ function RoutinesInner() {
           action={<Button onClick={() => setShowForm(true)}>Generar rutina</Button>} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {items.map((r) => (
-            <div key={r.id} className={`bg-white border rounded-2xl p-5 shadow-soft transition-colors group
+          {items.map((r) => {
+            const totalDays = r.plan_json.weekly_plan?.length ?? r.days_per_week;
+            const idx = Math.min(r.current_day_idx ?? 0, Math.max(0, totalDays - 1));
+            const todayFocus = r.plan_json.weekly_plan?.[idx]?.focus;
+            return (
+              <div key={r.id} className={`bg-white border rounded-2xl p-5 shadow-soft transition-colors group
                             ${r.is_active ? 'border-brand-400 ring-1 ring-brand-200' : 'border-surface-200 hover:border-brand-300'}`}>
-              {r.is_active && (
-                <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-700 bg-brand-50 px-2 py-1 rounded mb-3">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Rutina activa · Día {(r.current_day_idx ?? 0) + 1} / {r.plan_json.weekly_plan?.length ?? r.days_per_week}
-                </div>
-              )}
-              <div className="flex items-start justify-between gap-2 mb-3">
-                <button onClick={() => setDetail(r)} className="text-left flex-1 min-w-0">
-                  <h3 className="font-bold text-surface-900 group-hover:text-brand-700 transition-colors">{r.title}</h3>
-                  <p className="text-xs text-surface-500 mt-0.5">
-                    {r.days_per_week} días · {r.session_minutes} min · {FITNESS_GOAL_LABELS[r.goal]}
-                  </p>
-                </button>
-                <div className="flex gap-1">
-                  <button onClick={() => toggleFav(r.id)}
-                    className={`p-1.5 rounded-lg transition-colors ${r.is_favorite ? 'text-accent-600 bg-accent-50' : 'text-surface-400 hover:text-accent-600'}`}
-                    title={r.is_favorite ? 'Quitar favorita' : 'Marcar favorita'}>
-                    <Star className={`w-4 h-4 ${r.is_favorite ? 'fill-current' : ''}`} />
-                  </button>
-                  <button onClick={() => deleteRoutine(r.id)}
-                    className="p-1.5 rounded-lg text-surface-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                    title="Eliminar">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              <p className="text-sm text-surface-600 line-clamp-3">{r.plan_json.summary}</p>
-              <div className="flex items-center justify-between gap-2 mt-4">
-                <p className="text-xs text-surface-400">{formatDate(r.created_at)}</p>
-                {r.is_active ? (
-                  <button
-                    onClick={deactivateRoutine}
-                    className="text-xs font-semibold text-surface-600 hover:text-red-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">
-                    Desactivar
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => activateRoutine(r.id)}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 transition-colors px-3 py-1.5 rounded-lg shadow-soft">
-                    <Play className="w-3 h-3 fill-current" />
-                    Activar
-                  </button>
+                {r.is_active && (
+                  <div className="mb-3 space-y-1.5">
+                    <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-700 bg-brand-50 px-2 py-1 rounded">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Rutina activa · Día {idx + 1} / {totalDays}
+                    </div>
+                    {todayFocus && (
+                      <p className="text-xs text-surface-700 flex items-center gap-1.5">
+                        <CalendarCheck className="w-3 h-3 text-brand-600" />
+                        <span>Hoy te toca: <strong className="text-brand-700">{todayFocus}</strong></span>
+                      </p>
+                    )}
+                  </div>
                 )}
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <button onClick={() => setDetail(r)} className="text-left flex-1 min-w-0">
+                    <h3 className="font-bold text-surface-900 group-hover:text-brand-700 transition-colors">{r.title}</h3>
+                    <p className="text-xs text-surface-500 mt-0.5">
+                      {r.days_per_week} días · {r.session_minutes} min · {FITNESS_GOAL_LABELS[r.goal]}
+                    </p>
+                  </button>
+                  <div className="flex gap-1">
+                    <button onClick={() => toggleFav(r.id)}
+                      className={`p-1.5 rounded-lg transition-colors ${r.is_favorite ? 'text-accent-600 bg-accent-50' : 'text-surface-400 hover:text-accent-600'}`}
+                      title={r.is_favorite ? 'Quitar favorita' : 'Marcar favorita'}>
+                      <Star className={`w-4 h-4 ${r.is_favorite ? 'fill-current' : ''}`} />
+                    </button>
+                    <button onClick={() => deleteRoutine(r.id)}
+                      className="p-1.5 rounded-lg text-surface-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Eliminar">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-sm text-surface-600 line-clamp-3">{r.plan_json.summary}</p>
+                <div className="flex items-center justify-between gap-2 mt-4">
+                  <p className="text-xs text-surface-400">{formatDate(r.created_at)}</p>
+                  {r.is_active ? (
+                    <button
+                      onClick={deactivateRoutine}
+                      className="text-xs font-semibold text-surface-600 hover:text-red-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50">
+                      Desactivar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => activateRoutine(r.id)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 transition-colors px-3 py-1.5 rounded-lg shadow-soft">
+                      <Play className="w-3 h-3 fill-current" />
+                      Activar
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Form modal */}
       <Modal isOpen={showForm} onClose={() => setShowForm(false)} size="lg"
         title="Generar nueva rutina"
         description="Cuéntanos qué necesitas y la IA te generará un plan personalizado."
@@ -233,7 +245,6 @@ function RoutinesInner() {
         </div>
       </Modal>
 
-      {/* Detail modal */}
       {detail && <RoutineDetail routine={detail} onClose={() => setDetail(null)} />}
     </div>
   );
@@ -241,6 +252,28 @@ function RoutinesInner() {
 
 function RoutineDetail({ routine, onClose }: { routine: GeneratedRoutine; onClose: () => void }) {
   const [downloading, setDownloading] = useState(false);
+  const todayRef = useRef<HTMLDivElement | null>(null);
+
+  // Dia actual SOLO si la rutina esta activa. Usamos el indice (0-based) como
+  // fuente de verdad - igual que hace el Dashboard - para que ambos lados
+  // muestren siempre el mismo dia.
+  const totalDays = routine.plan_json.weekly_plan?.length ?? 0;
+  const activeDayIdx = routine.is_active && totalDays > 0
+    ? Math.min(routine.current_day_idx ?? 0, totalDays - 1)
+    : null;
+  const todayDay = activeDayIdx !== null
+    ? routine.plan_json.weekly_plan?.[activeDayIdx] ?? null
+    : null;
+
+  // Auto-scroll al dia de hoy al abrir el modal (solo si hay rutina activa).
+  useEffect(() => {
+    if (todayRef.current) {
+      const t = setTimeout(() => {
+        todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
+      return () => clearTimeout(t);
+    }
+  }, [routine.id, activeDayIdx]);
 
   async function handleDownload() {
     if (downloading) return;
@@ -280,34 +313,79 @@ function RoutineDetail({ routine, onClose }: { routine: GeneratedRoutine; onClos
       }
     >
       <div className="space-y-3 max-h-[60vh] overflow-y-auto -mx-2 px-2">
-        {routine.plan_json.weekly_plan?.map((d, idx) => (
-          <div key={idx} className="bg-surface-50 border border-surface-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-sm">
-                {d.day}
-              </div>
-              <div>
-                <p className="font-bold text-surface-900">{d.focus}</p>
-              </div>
+        {todayDay && activeDayIdx !== null && (
+          <div className="bg-gradient-to-br from-brand-50 to-accent-50 border border-brand-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center shrink-0">
+              <CalendarCheck className="w-5 h-5" />
             </div>
-            {d.warmup && <p className="text-xs text-surface-600 mb-2"><strong>Calentamiento:</strong> {d.warmup}</p>}
-            <div className="space-y-2">
-              {d.exercises?.map((ex, i) => (
-                <div key={i} className="bg-white rounded-lg p-2.5 border border-surface-100">
-                  <div className="flex items-center gap-2">
-                    <Dumbbell className="w-3.5 h-3.5 text-brand-600" />
-                    <span className="text-sm font-semibold text-surface-900">{ex.name}</span>
-                  </div>
-                  <p className="text-xs text-surface-600 mt-1">
-                    {ex.sets}×{ex.reps} reps · descanso {ex.rest_sec}s
-                    {ex.notes && ` · ${ex.notes}`}
-                  </p>
-                </div>
-              ))}
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-brand-700">
+                Día {activeDayIdx + 1} de {totalDays}
+              </p>
+              <p className="font-bold text-surface-900 truncate">
+                Hoy te toca: <span className="text-brand-700">{todayDay.focus}</span>
+              </p>
             </div>
-            {d.cooldown && <p className="text-xs text-surface-600 mt-2"><strong>Vuelta a la calma:</strong> {d.cooldown}</p>}
           </div>
-        ))}
+        )}
+
+        {routine.plan_json.weekly_plan?.map((d, idx) => {
+          const isToday = idx === activeDayIdx;
+          // Usamos idx + 1 como numero visual (fuente de verdad consistente
+          // con el dashboard) en lugar de d.day, que viene del JSON de la IA
+          // y podria no ser secuencial.
+          const dayNumber = idx + 1;
+          return (
+            <div
+              key={idx}
+              ref={isToday ? todayRef : undefined}
+              className={
+                isToday
+                  ? 'bg-gradient-to-br from-brand-50 to-white border-2 border-brand-400 rounded-xl p-4 shadow-soft ring-2 ring-brand-100'
+                  : 'bg-surface-50 border border-surface-200 rounded-xl p-4'
+              }
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <div
+                  className={
+                    isToday
+                      ? 'w-7 h-7 rounded-md bg-brand-500 text-white flex items-center justify-center font-bold text-sm'
+                      : 'w-7 h-7 rounded-md bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-sm'
+                  }
+                >
+                  {dayNumber}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-surface-900">{d.focus}</p>
+                    {isToday && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white bg-brand-500 px-2 py-0.5 rounded">
+                        <CalendarCheck className="w-3 h-3" />
+                        Hoy
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {d.warmup && <p className="text-xs text-surface-600 mb-2"><strong>Calentamiento:</strong> {d.warmup}</p>}
+              <div className="space-y-2">
+                {d.exercises?.map((ex, i) => (
+                  <div key={i} className="bg-white rounded-lg p-2.5 border border-surface-100">
+                    <div className="flex items-center gap-2">
+                      <Dumbbell className="w-3.5 h-3.5 text-brand-600" />
+                      <span className="text-sm font-semibold text-surface-900">{ex.name}</span>
+                    </div>
+                    <p className="text-xs text-surface-600 mt-1">
+                      {ex.sets}×{ex.reps} reps · descanso {ex.rest_sec}s
+                      {ex.notes && ` · ${ex.notes}`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {d.cooldown && <p className="text-xs text-surface-600 mt-2"><strong>Vuelta a la calma:</strong> {d.cooldown}</p>}
+            </div>
+          );
+        })}
         {routine.plan_json.tips?.length ? (
           <div className="bg-brand-50 border border-brand-200 rounded-xl p-4">
             <p className="font-bold text-brand-900 text-sm mb-2 flex items-center gap-1.5">

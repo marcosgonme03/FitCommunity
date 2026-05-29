@@ -200,6 +200,86 @@ router.post('/2fa/verify', requireAuth, authController.verify2FA);
 
 /**
  * @openapi
+ * /auth/2fa/challenge/setup:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Iniciar setup de 2FA durante login obligatorio (admin sin 2FA)
+ *     description: "Cuando login() devuelve TOTP_SETUP_REQUIRED con un setupToken, este endpoint lo intercambia por un QR + secret. Sólo válido durante 5 min."
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [setupToken]
+ *             properties:
+ *               setupToken: { type: string }
+ *     responses:
+ *       200: { description: QR + secret }
+ *       401: { description: setupToken expirado }
+ */
+router.post('/2fa/challenge/setup', authRateLimiter, authController.setup2FAChallenge);
+
+/**
+ * @openapi
+ * /auth/2fa/challenge/verify-setup:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verificar TOTP del setup obligatorio y activar 2FA
+ *     description: "Confirma el código TOTP que el admin acaba de configurar. Si es válido, activa 2FA y emite los tokens de sesión definitivos."
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [setupToken, code]
+ *             properties:
+ *               setupToken: { type: string }
+ *               code: { type: string, example: "123456" }
+ *     responses:
+ *       200: { description: 2FA activado + tokens emitidos }
+ *       400: { description: Código inválido }
+ *       401: { description: setupToken expirado }
+ */
+router.post(
+  '/2fa/challenge/verify-setup',
+  authRateLimiter,
+  authController.verify2FAChallengeSetup
+);
+
+/**
+ * @openapi
+ * /auth/2fa/challenge/verify-login:
+ *   post:
+ *     tags: [Auth]
+ *     summary: Verificar TOTP en login (admin con 2FA ya activo)
+ *     description: "El frontend recibe TOTP_REQUIRED + challengeToken desde /login y lo intercambia aquí por una sesión válida."
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [challengeToken, code]
+ *             properties:
+ *               challengeToken: { type: string }
+ *               code: { type: string, example: "123456" }
+ *     responses:
+ *       200: { description: Login completado }
+ *       401: { description: Código inválido o challenge expirado }
+ */
+router.post(
+  '/2fa/challenge/verify-login',
+  authRateLimiter,
+  authController.verify2FAChallengeLogin
+);
+
+/**
+ * @openapi
  * /auth/2fa/disable:
  *   post:
  *     tags: [Auth]

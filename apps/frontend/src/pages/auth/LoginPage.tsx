@@ -5,17 +5,18 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Eye, EyeOff, AlertCircle, Loader2, Activity, Users, TrendingUp,
-  Sparkles, Trophy, Heart, ArrowRight, ShieldCheck,
+  Sparkles, Trophy, Heart, ArrowRight,
 } from 'lucide-react';
 import authService from '../../services/auth.service';
 import { useAuthStore } from '../../store/authStore';
 import Logo from '../../components/ui/Logo';
-import { getErrorMessage, getErrorCode } from '../../lib/errors';
+import { getErrorMessage, getErrorCode, getErrorData } from '../../lib/errors';
+import TotpVerifyModal from '../../components/auth/TotpVerifyModal';
+import TotpSetupModal from '../../components/auth/TotpSetupModal';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
   password: z.string().min(1, 'Contraseña requerida'),
-  totpCode: z.string().optional(),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -27,9 +28,14 @@ export default function LoginPage() {
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
 
   const [showPassword, setShowPassword] = useState(false);
-  const [needsTotp, setNeedsTotp] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [slowHint, setSlowHint] = useState(false);
+
+  // ─── Estado del flujo 2FA ───────────────────────────────────────────────
+  // verifyChallenge: el admin ya tiene 2FA activo y debe introducir el código
+  // setupChallenge: el admin no tiene 2FA y debe configurarlo (primer login)
+  const [verifyChallenge, setVerifyChallenge] = useState<string | null>(null);
+  const [setupChallenge, setSetupChallenge] = useState<string | null>(null);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
 
@@ -47,40 +53,75 @@ export default function LoginPage() {
     return () => clearTimeout(t);
   }, [isSubmitting]);
 
-  const onSubmit = async (data: LoginForm) => {
+  /**
+   * Finaliza la sesión tras recibir un accessToken (de cualquiera de los tres
+   * flujos: login normal, login admin tras verificar TOTP, login admin tras
+   * activar 2FA por primera vez). Sincroniza el store y redirige.
+   *
+   * IMPORTANTE: guardar el token en el store ANTES de llamar getMe(), para que
+   * el interceptor de axios lo encuentre y añada el Authorization header. Sin
+   * esto, getMe() falla con 401, el interceptor intenta refrescar y en Safari
+   * iOS (ITP) la cookie cross-site bloquea el refresh → bucle de login.
+   */
+  const finalizeLogin = async (accessToken: string) => {
+    setAccessToken(accessToken);
+    const user = await authService.getMe();
+    setAuth(user, accessToken);
+
+    if (user.role === 'ADMIN') {
+      navigate('/admin', { replace: true });
+      return;
+    }
+
+    if (!user.profile?.onboardingCompleted) {
+      navigate('/onboarding', { replace: true });
+    } else {
+      navigate(from, { replace: true });
+    }
+  };
+
+  const onSubmit = async (formData: LoginForm) => {
     setServerError(null);
     try {
-      const { accessToken } = await authService.login(data);
-      // IMPORTANTE: guardar el token en el store ANTES de llamar getMe(), para
-      // que el interceptor de axios lo encuentre y añada el Authorization header.
-      // Sin esto, getMe() falla con 401, el interceptor intenta refrescar y, en
-      // móvil donde la cookie cross-site está bloqueada (Safari iOS ITP), el
-      // refresh falla → window.location.href='/login' → bucle de login.
-      setAccessToken(accessToken);
-      const user = await authService.getMe();
-      setAuth(user, accessToken);
-
-      if (user.role === 'ADMIN') {
-        navigate('/admin', { replace: true });
-        return;
-      }
-
-      if (!user.profile?.onboardingCompleted) {
-        navigate('/onboarding', { replace: true });
-      } else {
-        navigate(from, { replace: true });
-      }
+      const { accessToken } = await authService.login(formData);
+      await finalizeLogin(accessToken);
     } catch (err: unknown) {
       const code = getErrorCode(err);
-      const message = getErrorMessage(err, 'Error al iniciar sesión');
 
-      if (code === 'TOTP_REQUIRED') {
-        setNeedsTotp(true);
-        setServerError('Introduce tu código 2FA');
-      } else {
-        setServerError(message);
+      // Admin sin 2FA configurado → setup obligatorio
+      if (code === 'TOTP_SETUP_REQUIRED') {
+        const payload = getErrorData<{ setupToken?: string }>(err);
+        if (payload?.setupToken) {
+          setSetupChallenge(payload.setupToken);
+          return;
+        }
       }
+
+      // Admin con 2FA activo → pedir código
+      if (code === 'TOTP_REQUIRED') {
+        const payload = getErrorData<{ challengeToken?: string }>(err);
+        if (payload?.challengeToken) {
+          setVerifyChallenge(payload.challengeToken);
+          return;
+        }
+      }
+
+      setServerError(getErrorMessage(err, 'Error al iniciar sesión'));
     }
+  };
+
+  // Verificar código TOTP cuando admin ya tiene 2FA activo
+  const handleVerifyTotp = async (code: string) => {
+    if (!verifyChallenge) return;
+    const { accessToken } = await authService.verify2FAChallengeLogin(verifyChallenge, code);
+    setVerifyChallenge(null);
+    await finalizeLogin(accessToken);
+  };
+
+  // Tras completar el setup obligatorio, finalizar sesión con el token recibido
+  const handleSetupSuccess = async (accessToken: string) => {
+    setSetupChallenge(null);
+    await finalizeLogin(accessToken);
   };
 
   return (
@@ -90,53 +131,56 @@ export default function LoginPage() {
       <div className="lg:hidden absolute -bottom-32 -left-32 w-96 h-96 bg-accent-200/30 rounded-full blur-3xl pointer-events-none" />
 
       {/* ─── Panel izquierdo: hero (solo desktop) ────────────────────────── */}
-      <div className="hidden lg:flex flex-col justify-between w-[520px] p-12 relative overflow-hidden bg-gradient-to-br from-surface-900 via-surface-800 to-brand-900 text-white">
+      <div className="hidden lg:flex flex-col justify-center w-full max-w-[560px] lg:basis-[44%] xl:basis-[40%] 2xl:basis-[36%] shrink-0 px-10 xl:px-14 py-10 relative overflow-hidden bg-gradient-to-br from-surface-900 via-surface-800 to-brand-900 text-white">
         {/* Patrones decorativos */}
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-20 w-96 h-96 bg-accent-500/20 rounded-full blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(249,115,22,0.15),transparent_50%)]" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-500/30 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-40 -left-20 w-96 h-96 bg-accent-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(249,115,22,0.15),transparent_50%)] pointer-events-none" />
 
-        {/* Logo */}
-        <div className="relative flex items-center gap-3">
-          <Logo size={44} rounded="xl" className="shadow-glow" />
-          <div>
-            <span className="text-xl font-extrabold tracking-tight">FitCommunity</span>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-brand-300 font-bold">Tu app de gimnasio</p>
+        {/* Contenido centrado verticalmente */}
+        <div className="relative flex flex-col gap-8 xl:gap-10 max-w-md w-full mx-auto">
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <Logo size={42} rounded="xl" className="shadow-glow" />
+            <div>
+              <span className="text-lg xl:text-xl font-extrabold tracking-tight leading-none">FitCommunity</span>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-brand-300 font-bold mt-1">Tu app de gimnasio</p>
+            </div>
           </div>
-        </div>
 
-        {/* Hero copy */}
-        <div className="relative space-y-6 max-w-md">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-semibold text-brand-200">
-            <Sparkles className="w-3 h-3" />
-            Con Coach IA · Análisis avanzado · Comunidad activa
+          {/* Hero copy */}
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-semibold text-brand-200">
+              <Sparkles className="w-3 h-3 shrink-0" />
+              <span>Con Coach IA · Análisis avanzado · Comunidad activa</span>
+            </div>
+            <h1 className="text-4xl xl:text-5xl 2xl:text-6xl font-extrabold leading-[1.05] tracking-tight">
+              Entrena.<br />
+              Progresa.<br />
+              <span className="bg-gradient-to-r from-brand-400 to-accent-400 bg-clip-text text-transparent">
+                Comparte.
+              </span>
+            </h1>
+            <p className="text-white/80 text-sm xl:text-base leading-relaxed">
+              Registra cada serie, sigue tu progreso con gráficas avanzadas y comparte tus
+              logros con una comunidad de atletas que entrenan tan duro como tú.
+            </p>
           </div>
-          <h1 className="text-5xl font-extrabold leading-[1.05] tracking-tight">
-            Entrena.<br />
-            Progresa.<br />
-            <span className="bg-gradient-to-r from-brand-400 to-accent-400 bg-clip-text text-transparent">
-              Comparte.
-            </span>
-          </h1>
-          <p className="text-white/80 text-base leading-relaxed">
-            Registra cada serie, sigue tu progreso con gráficas avanzadas y comparte tus
-            logros con una comunidad de atletas que entrenan tan duro como tú.
-          </p>
 
           {/* Features */}
-          <div className="space-y-3 pt-2">
+          <div className="space-y-2.5 xl:space-y-3">
             <FeatureRow icon={Activity} text="Más de 200 ejercicios y 20 deportes" />
             <FeatureRow icon={TrendingUp} text="Estadísticas, PRs y volumen en tiempo real" />
             <FeatureRow icon={Sparkles} text="Coach IA personalizado (Premium)" />
             <FeatureRow icon={Users} text="Feed social con likes y comentarios" />
           </div>
-        </div>
 
-        {/* Social proof */}
-        <div className="relative grid grid-cols-3 gap-3 text-center">
-          <SocialProof icon={Trophy} value="20+" label="Deportes" />
-          <SocialProof icon={Activity} value="200+" label="Ejercicios" />
-          <SocialProof icon={Heart} value="100%" label="Gratis (MVP)" />
+          {/* Social proof */}
+          <div className="grid grid-cols-3 gap-2.5 xl:gap-3 text-center pt-2 border-t border-white/10">
+            <SocialProof icon={Trophy} value="20+" label="Deportes" />
+            <SocialProof icon={Activity} value="200+" label="Ejercicios" />
+            <SocialProof icon={Heart} value="100%" label="Gratis (MVP)" />
+          </div>
         </div>
       </div>
 
@@ -231,30 +275,6 @@ export default function LoginPage() {
               {errors.password && <p className="error-message">{errors.password.message}</p>}
             </div>
 
-            {/* 2FA code (shown when needed) */}
-            {needsTotp && (
-              <div className="animate-fade-in p-4 rounded-xl bg-brand-50 border border-brand-200">
-                <label htmlFor="totpCode" className="label flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-brand-600" />
-                  Código 2FA
-                </label>
-                <input
-                  id="totpCode"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="000000"
-                  className="input-field tracking-[0.5em] text-center text-lg font-bold"
-                  autoComplete="one-time-code"
-                  autoFocus
-                  {...register('totpCode')}
-                />
-                <p className="text-xs text-surface-600 mt-2">
-                  Introduce el código de 6 dígitos de tu app autenticadora.
-                </p>
-              </div>
-            )}
-
             {/* Submit button */}
             <button
               type="submit"
@@ -308,6 +328,22 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── Modales 2FA (solo se renderizan cuando hay challenge) ─────────── */}
+      <TotpVerifyModal
+        isOpen={!!verifyChallenge}
+        onClose={() => setVerifyChallenge(null)}
+        onVerify={handleVerifyTotp}
+      />
+
+      {setupChallenge && (
+        <TotpSetupModal
+          isOpen={!!setupChallenge}
+          onClose={() => setSetupChallenge(null)}
+          setupToken={setupChallenge}
+          onSuccess={handleSetupSuccess}
+        />
+      )}
     </div>
   );
 }
@@ -320,7 +356,7 @@ function FeatureRow({ icon: Icon, text }: { icon: React.ElementType; text: strin
       <div className="w-8 h-8 rounded-lg bg-white/10 backdrop-blur-sm border border-white/15 flex items-center justify-center shrink-0">
         <Icon className="w-4 h-4 text-brand-300" />
       </div>
-      <span className="text-sm text-white/90">{text}</span>
+      <span className="text-sm text-white/90 leading-tight">{text}</span>
     </div>
   );
 }
@@ -335,10 +371,10 @@ function SocialProof({
   label: string;
 }) {
   return (
-    <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-3">
+    <div className="rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-2.5 xl:p-3">
       <Icon className="w-5 h-5 text-brand-400 mx-auto mb-1.5" />
-      <p className="text-xl font-extrabold text-white">{value}</p>
-      <p className="text-[10px] uppercase tracking-wider text-white/60 mt-0.5">{label}</p>
+      <p className="text-lg xl:text-xl font-extrabold text-white leading-none">{value}</p>
+      <p className="text-[10px] uppercase tracking-wider text-white/60 mt-1">{label}</p>
     </div>
   );
 }

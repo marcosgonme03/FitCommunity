@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import jwt, { JwtPayload } from 'jsonwebtoken';
 import { authenticator } from 'otplib';
 import qrcode from 'qrcode';
 import { v4 as uuidv4 } from 'uuid';
@@ -39,6 +40,52 @@ export interface TokenPair {
 
 function generateSecureToken(): string {
   return crypto.randomBytes(32).toString('hex');
+}
+
+// ─── Challenge tokens (JWT stateless — no requiere Redis) ───────────────────
+//
+// Para el flujo 2FA usamos JWTs cortos firmados con JWT_ACCESS_SECRET y un claim
+// `purpose` que evita reutilizar tokens entre flujos. Esto mantiene el login
+// libre de dependencias externas (Redis no se toca en el path crítico).
+//
+// Tipos de challenge:
+//   - 'totp_login_challenge': admin con 2FA activo, esperando código (5 min)
+//   - 'totp_setup':           admin sin 2FA, autorizado a pedir QR (5 min)
+//   - 'totp_setup_pending':   contiene el secret recién generado y firmado,
+//                             devuelto por /challenge/setup, validado en
+//                             /challenge/verify-setup (10 min)
+
+type ChallengePurpose = 'totp_login_challenge' | 'totp_setup' | 'totp_setup_pending';
+
+interface ChallengeTokenPayload {
+  userId: string;
+  purpose: ChallengePurpose;
+  /** Solo presente cuando purpose === 'totp_setup_pending' */
+  secret?: string;
+}
+
+function signChallengeToken(payload: ChallengeTokenPayload, expiresInSec: number): string {
+  return jwt.sign(payload, config.JWT_ACCESS_SECRET, { expiresIn: expiresInSec });
+}
+
+function verifyChallengeToken(
+  token: string,
+  expectedPurpose: ChallengePurpose
+): ChallengeTokenPayload {
+  let decoded: JwtPayload & ChallengeTokenPayload;
+  try {
+    decoded = jwt.verify(token, config.JWT_ACCESS_SECRET) as JwtPayload & ChallengeTokenPayload;
+  } catch {
+    throw new AppError(
+      'Sesión expirada. Vuelve a iniciar sesión.',
+      401,
+      'CHALLENGE_TOKEN_EXPIRED'
+    );
+  }
+  if (decoded.purpose !== expectedPurpose) {
+    throw new AppError('Token con propósito incorrecto', 401, 'INVALID_TOKEN_PURPOSE');
+  }
+  return { userId: decoded.userId, purpose: decoded.purpose, secret: decoded.secret };
 }
 
 async function createRefreshToken(
@@ -166,10 +213,38 @@ export async function login(
     throw new AppError('Verifica tu email antes de iniciar sesión', 403, 'EMAIL_NOT_VERIFIED');
   }
 
-  // 2FA check
+  // ─── 2FA: obligatorio para ADMIN, opcional para USER ─────────────────────
+  // Si el usuario es ADMIN y aún no ha configurado 2FA, no podemos dejarle entrar
+  // sin un segundo factor. Generamos un setupToken corto (5 min) que el frontend
+  // intercambia por un QR + verificación TOTP. Sólo tras completar el setup recibe
+  // los tokens de sesión definitivos.
+  if (user.role === 'ADMIN' && !user.two_fa_enabled) {
+    const setupToken = signChallengeToken(
+      { userId: user.id, purpose: 'totp_setup' },
+      300 // 5 min
+    );
+    throw new AppError(
+      'Configuración de 2FA obligatoria para administradores',
+      403,
+      'TOTP_SETUP_REQUIRED',
+      { setupToken }
+    );
+  }
+
   if (user.two_fa_enabled) {
     if (!dto.totpCode) {
-      throw new AppError('Código 2FA requerido', 403, 'TOTP_REQUIRED');
+      // El frontend abre el modal de verificación con este challengeToken y lo
+      // intercambia por una sesión válida en /2fa/challenge/verify-login.
+      const challengeToken = signChallengeToken(
+        { userId: user.id, purpose: 'totp_login_challenge' },
+        300 // 5 min
+      );
+      throw new AppError(
+        'Código 2FA requerido',
+        403,
+        'TOTP_REQUIRED',
+        { challengeToken }
+      );
     }
     if (!user.two_fa_secret) {
       throw new AppError('Error en configuración 2FA', 500, 'TOTP_ERROR');
@@ -394,6 +469,116 @@ export async function verify2FA(userId: string, totpCode: string): Promise<void>
   });
 
   await redis.del(`2fa_pending:${userId}`);
+}
+
+/**
+ * Setup 2FA durante el flujo de login (cuando admin no tiene 2FA configurado).
+ * Acepta el `setupToken` emitido por login() en lugar de un JWT.
+ */
+export async function setup2FAFromChallenge(
+  setupToken: string
+): Promise<{ qrCodeUrl: string; secret: string; pendingToken: string }> {
+  const payload = verifyChallengeToken(setupToken, 'totp_setup');
+
+  const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+  if (!user) throw new AppError('Usuario no encontrado', 404, 'NOT_FOUND');
+  if (user.two_fa_enabled) {
+    throw new AppError('2FA ya está activado', 400, '2FA_ALREADY_ENABLED');
+  }
+
+  const secret = authenticator.generateSecret();
+  const otpAuthUrl = authenticator.keyuri(user.email, config.TOTP_APP_NAME, secret);
+  const qrCodeUrl = await qrcode.toDataURL(otpAuthUrl);
+
+  // El secret viaja al cliente firmado dentro de un JWT corto. El cliente lo
+  // devuelve en /verify-setup; el servidor lo decodifica y verifica el código
+  // contra él. No persiste en estado ningún lado hasta que se confirme.
+  const pendingToken = signChallengeToken(
+    { userId: user.id, purpose: 'totp_setup_pending', secret },
+    600 // 10 min
+  );
+
+  return { qrCodeUrl, secret, pendingToken };
+}
+
+/**
+ * Verifica el TOTP introducido durante el setup obligatorio post-login.
+ * Si el código es válido, activa 2FA y emite los tokens de sesión definitivos.
+ */
+export async function verify2FAFromChallenge(
+  pendingToken: string,
+  totpCode: string,
+  meta?: { deviceInfo?: string; ipAddress?: string }
+): Promise<TokenPair> {
+  const payload = verifyChallengeToken(pendingToken, 'totp_setup_pending');
+
+  if (!payload.secret) {
+    throw new AppError(
+      'Token de configuración inválido. Reinicia el proceso.',
+      400,
+      '2FA_SESSION_EXPIRED'
+    );
+  }
+
+  const isValid = authenticator.verify({ token: totpCode, secret: payload.secret });
+  if (!isValid) throw new AppError('Código 2FA inválido', 400, 'TOTP_INVALID');
+
+  // Persistimos 2FA y registramos login en una sola transacción
+  const user = await prisma.user.update({
+    where: { id: payload.userId },
+    data: {
+      two_fa_enabled: true,
+      two_fa_secret: payload.secret,
+      last_login_at: new Date(),
+    },
+  });
+
+  const accessToken = signAccessToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+  });
+  const refreshToken = await createRefreshToken(user.id, meta);
+
+  logger.info(`2FA configured & login completed for admin: ${user.email}`);
+  return { accessToken, refreshToken };
+}
+
+/**
+ * Verifica el TOTP cuando el admin ya tiene 2FA activo y le ha llegado un
+ * challengeToken desde login(). Equivale a un re-login con el code, pero sin
+ * volver a pedir la password al frontend.
+ */
+export async function verifyLoginChallenge(
+  challengeToken: string,
+  totpCode: string,
+  meta?: { deviceInfo?: string; ipAddress?: string }
+): Promise<TokenPair> {
+  const payload = verifyChallengeToken(challengeToken, 'totp_login_challenge');
+
+  const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+  if (!user) throw new AppError('Usuario no encontrado', 404, 'NOT_FOUND');
+  if (!user.two_fa_enabled || !user.two_fa_secret) {
+    throw new AppError('2FA no configurado', 400, '2FA_NOT_ENABLED');
+  }
+
+  const isValid = authenticator.verify({ token: totpCode, secret: user.two_fa_secret });
+  if (!isValid) throw new AppError('Código 2FA inválido', 401, 'TOTP_INVALID');
+
+  const accessToken = signAccessToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+  });
+  const refreshToken = await createRefreshToken(user.id, meta);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { last_login_at: new Date() },
+  });
+
+  logger.info(`2FA challenge verified for: ${user.email}`);
+  return { accessToken, refreshToken };
 }
 
 /**

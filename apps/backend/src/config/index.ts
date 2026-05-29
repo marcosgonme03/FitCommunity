@@ -33,7 +33,9 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900_000),
-  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+  // 1000 req / 15 min = ~66/min por usuario (o IP en su defecto). Suficiente
+  // para un usuario activo. Si necesitas más, ajusta vía .env sin tocar código.
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(1000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(10),
 
   // ─── Stripe (Premium) ───────────────────────────────────────────────────

@@ -52,3 +52,13 @@ export function getErrorCode(err: unknown): string | null {
   const code = e?.response?.data?.code;
   return typeof code === 'string' ? code : null;
 }
+
+/**
+ * Extrae el campo `data` de la respuesta de error del backend (lo usamos para
+ * recuperar setupToken / challengeToken durante el flujo 2FA).
+ */
+export function getErrorData<T = Record<string, unknown>>(err: unknown): T | null {
+  const e = err as { response?: { data?: { data?: unknown } } };
+  const data = e?.response?.data?.data;
+  return data && typeof data === 'object' ? (data as T) : null;
+}
